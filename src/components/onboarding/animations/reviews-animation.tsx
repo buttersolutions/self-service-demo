@@ -11,68 +11,61 @@ interface ReviewsAnimationProps {
   reviewCount: number;
 }
 
-const rotations = [-2.5, 1.8, -1.2, 3, -0.8];
+const scales = [1, 0.97, 0.94, 0.98, 0.95, 0.96, 0.93];
+const rotations = [-1.5, 1.2, -0.8, 1.8, -1, 0.6, -1.3];
 
 export function ReviewsAnimation({ reviews, isActive }: ReviewsAnimationProps) {
   return (
-    <div className="w-full h-full overflow-hidden font-sans flex items-center justify-center">
-      <div className="max-w-lg mx-auto px-6 relative" style={{ paddingTop: "2rem", paddingBottom: "2rem" }}>
+    <div className="w-full h-full overflow-hidden font-sans flex items-center justify-center p-8">
+      <div className="grid grid-cols-2 gap-4 max-w-2xl w-full auto-rows-min">
         {reviews.map((review, i) => (
           <motion.div
             key={review.id}
-            initial={{ opacity: 0, y: 40 }}
-            animate={isActive ? { opacity: 1, y: 0, rotate: rotations[i % rotations.length] } : {}}
-            transition={{ delay: 0.4 + i * 0.7, duration: 0.5, ease: "easeOut" }}
-            className="bg-white rounded-2xl p-6 shadow-sm relative"
-            style={{
-              marginTop: i === 0 ? 0 : "-1.5rem",
-              zIndex: reviews.length + i,
+            initial={{ opacity: 0, scale: 0.3 }}
+            animate={
+              isActive
+                ? {
+                    opacity: 1,
+                    scale: scales[i % scales.length],
+                    rotate: rotations[i % rotations.length],
+                  }
+                : {}
+            }
+            transition={{
+              delay: 0.2 + i * 0.18,
+              type: "spring",
+              stiffness: 400,
+              damping: 22,
+              mass: 0.8,
             }}
+            className="bg-white rounded-3xl p-6 shadow-sm"
           >
-            <div className="flex items-start gap-4">
-              {/* Colored avatar */}
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-base font-semibold"
-                style={{
-                  backgroundColor: `hsl(${(i * 47 + 20) % 360}, 55%, 88%)`,
-                  color: `hsl(${(i * 47 + 20) % 360}, 45%, 38%)`,
-                }}
-              >
-                {review.avatar}
-              </div>
+            <div className="flex items-center gap-3 mb-3">
+              <img
+                src={review.avatar}
+                alt={review.author}
+                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+              />
               <div className="flex-1 min-w-0">
-                {/* Name + stars row */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-semibold text-foreground">{review.author}</span>
-                    <p className="text-xs text-muted-foreground">{review.date}</p>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    {Array.from({ length: 5 }).map((_, si) => (
-                      <Star
-                        key={si}
-                        className={`w-4 h-4 ${
-                          si < review.rating
-                            ? "fill-amber-400 text-amber-400"
-                            : "fill-gray-200 text-gray-200"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                <span className="text-sm font-semibold text-foreground block truncate">{review.author}</span>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, si) => (
+                    <Star
+                      key={si}
+                      className={`w-3.5 h-3.5 ${
+                        si < review.rating
+                          ? "fill-amber-400 text-amber-400"
+                          : "fill-gray-200 text-gray-200"
+                      }`}
+                    />
+                  ))}
+                  <span className="text-[11px] text-muted-foreground ml-1">{review.date}</span>
                 </div>
-                {/* Review text */}
-                <p className="text-sm text-foreground mt-3 leading-relaxed">
-                  {review.text.length > 200 ? (
-                    <>
-                      {review.text.slice(0, 200)}...{" "}
-                      <span className="text-primary font-medium">More</span>
-                    </>
-                  ) : (
-                    review.text
-                  )}
-                </p>
               </div>
             </div>
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+              {review.text}
+            </p>
           </motion.div>
         ))}
       </div>

@@ -2,51 +2,57 @@ export interface OnboardingStep {
   id: string;
   label: string;
   description: string;
-  duration: number; // ms to simulate
-  animationType: "map" | "reviews" | "branding" | "website" | "competitors" | "info";
 }
 
 export const onboardingSteps: OnboardingStep[] = [
   {
-    id: "locations",
-    label: "Finding locations",
-    description: "Discovering all your business locations",
-    duration: 6000,
-    animationType: "map",
+    id: "gathering",
+    label: "Gathering information",
+    description: "Researching your business online",
   },
   {
-    id: "branding",
-    label: "Extracting branding",
-    description: "Identifying your brand colors, fonts & style",
-    duration: 5500,
+    id: "clarifying",
+    label: "Clarifying questions",
+    description: "Confirm your locations and details",
+  },
+  {
+    id: "ready",
+    label: "Your branded experience is ready",
+    description: "Preview your AllGravy app",
+  },
+];
+
+/** Sub-animations that auto-play during the "gathering" step */
+export interface GatheringSubStep {
+  id: string;
+  animationType: "branding" | "map" | "reviews" | "insights";
+  searchQuery: string;
+  duration: number;
+}
+
+export const gatheringSubSteps: GatheringSubStep[] = [
+  {
+    id: "brand",
     animationType: "branding",
+    searchQuery: "{name} brand logo colors",
+    duration: 5000,
+  },
+  {
+    id: "locations",
+    animationType: "map",
+    searchQuery: "{name} locations in {city}",
+    duration: 5500,
   },
   {
     id: "reviews",
-    label: "Gathering reviews",
-    description: "Analyzing customer sentiment across platforms",
-    duration: 7000,
     animationType: "reviews",
+    searchQuery: "{name} customer reviews",
+    duration: 4000,
   },
   {
-    id: "website",
-    label: "Scanning website",
-    description: "Crawling your web presence for key info",
-    duration: 5000,
-    animationType: "website",
-  },
-  {
-    id: "competitors",
-    label: "Analyzing competitors",
-    description: "Mapping your competitive landscape",
-    duration: 5500,
-    animationType: "competitors",
-  },
-  {
-    id: "info",
-    label: "Compiling business profile",
-    description: "Assembling your complete business profile",
-    duration: 4500,
-    animationType: "info",
+    id: "insights",
+    animationType: "insights",
+    searchQuery: "{name} business insights {city}",
+    duration: 6000,
   },
 ];

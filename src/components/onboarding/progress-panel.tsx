@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { Check, Loader2, Circle } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { AllgravyLogo } from "@/components/ui/allgravy-logo";
 import type { OnboardingStep } from "@/lib/onboarding-steps";
 
@@ -11,15 +10,17 @@ interface ProgressPanelProps {
   currentStepIndex: number;
   completedSteps: Set<string>;
   businessName: string;
+  /** Override the description for the current step (e.g. dynamic search query) */
+  activeDescription?: string;
 }
 
 export function ProgressPanel({
   steps,
   currentStepIndex,
   completedSteps,
+  activeDescription,
 }: ProgressPanelProps) {
   const allDone = completedSteps.size === steps.length;
-  const progressValue = (completedSteps.size / steps.length) * 100;
 
   return (
     <div className="h-full flex flex-col bg-card rounded-2xl border border-border font-sans">
@@ -37,11 +38,11 @@ export function ProgressPanel({
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.08, duration: 0.3 }}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-colors ${
+                className={`flex items-start gap-2.5 px-2.5 py-2.5 rounded-md transition-colors ${
                   isCurrent ? "bg-muted" : ""
                 }`}
               >
-                <div className="flex-shrink-0 relative">
+                <div className="flex-shrink-0 relative mt-0.5">
                   {isCompleted ? (
                     <>
                       <motion.div
@@ -80,11 +81,12 @@ export function ProgressPanel({
                   </span>
                   {isCurrent && (
                     <motion.span
+                      key={activeDescription ?? step.description}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="text-[11px] text-muted-foreground block mt-0.5 leading-tight"
                     >
-                      {step.description}
+                      {activeDescription ?? step.description}
                     </motion.span>
                   )}
                 </div>
@@ -92,15 +94,6 @@ export function ProgressPanel({
             );
           })}
         </div>
-      </div>
-
-      {/* Bottom progress */}
-      <div className="px-4 py-3 border-t border-border">
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
-          <span>Progress</span>
-          <span>{Math.round(progressValue)}%</span>
-        </div>
-        <Progress value={progressValue} className="h-1" />
       </div>
 
       {/* Logo */}

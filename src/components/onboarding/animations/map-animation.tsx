@@ -1,156 +1,134 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Map, MapMarker, useMap } from "@/components/ui/map";
+import { Map } from "@/components/ui/map";
 import { CountUp } from "@/components/ui/count-up";
 import type { BusinessLocation } from "@/lib/mock-data";
+import MapLibreGL from "maplibre-gl";
 
 interface MapAnimationProps {
   locations: BusinessLocation[];
   isActive: boolean;
-  businessName?: string;
 }
 
-function TypewriterText({ text, delay = 0 }: { text: string; delay?: number }) {
-  const [displayed, setDisplayed] = useState("");
-  const [started, setStarted] = useState(false);
-
-  useEffect(() => {
-    const startTimer = setTimeout(() => setStarted(true), delay * 1000);
-    return () => clearTimeout(startTimer);
-  }, [delay]);
-
-  useEffect(() => {
-    if (!started) return;
-    let i = 0;
-    const interval = setInterval(() => {
-      i++;
-      setDisplayed(text.slice(0, i));
-      if (i >= text.length) clearInterval(interval);
-    }, 60);
-    return () => clearInterval(interval);
-  }, [started, text]);
-
-  return (
-    <span>
-      {displayed}
-      {started && displayed.length < text.length && (
-        <motion.span
-          animate={{ opacity: [1, 0] }}
-          transition={{ duration: 0.5, repeat: Infinity }}
-          className="inline-block w-[2px] h-4 bg-foreground ml-px align-middle"
-        />
-      )}
-    </span>
-  );
+function computeTarget(locations: BusinessLocation[]) {
+  // Always zoom to the main/primary location
+  const main = locations.find((l) => l.isMain) ?? locations[0];
+  return { center: [main.lng, main.lat] as [number, number], zoom: 14 };
 }
 
-function FlyToAnimation({ locations, isActive }: { locations: BusinessLocation[]; isActive: boolean }) {
-  const { map, isLoaded } = useMap();
-  const hasFlown = useRef(false);
+function createPinElement(isMain: boolean): HTMLElement {
+  const wrapper = document.createElement("div");
+  wrapper.style.opacity = "0";
+  wrapper.style.transform = "translateY(-12px) scale(0.5)";
+  wrapper.style.transition = "opacity 0.5s ease, transform 0.5s ease";
 
+  const size = isMain ? 32 : 24;
+  const color = isMain ? "#625CE4" : "#6b7280";
+
+  wrapper.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2))"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`;
+
+  return wrapper;
+}
+
+export function MapAnimation({ locations, isActive }: MapAnimationProps) {
+  const target = useMemo(() => computeTarget(locations), [locations]);
+  const mapRef = useRef<MapLibreGL.Map>(null);
+
+  // Stable refs so the effect closure always reads fresh values
+  const locationsRef = useRef(locations);
+  locationsRef.current = locations;
+  const targetRef = useRef(target);
+  targetRef.current = target;
+
+  // Run once on mount. All timers tracked for cleanup.
   useEffect(() => {
-    if (!map || !isLoaded || !isActive || hasFlown.current) return;
-    hasFlown.current = true;
+    const allTimers: ReturnType<typeof setTimeout>[] = [];
+    const markers: MapLibreGL.Marker[] = [];
+    let observer: ResizeObserver | null = null;
+    let destroyed = false;
 
-    const centerLat = locations.reduce((sum, l) => sum + l.lat, 0) / locations.length;
-    const centerLng = locations.reduce((sum, l) => sum + l.lng, 0) / locations.length;
-    const latSpread = Math.max(...locations.map((l) => l.lat)) - Math.min(...locations.map((l) => l.lat));
-    const lngSpread = Math.max(...locations.map((l) => l.lng)) - Math.min(...locations.map((l) => l.lng));
-    const spread = Math.max(latSpread, lngSpread);
-    const targetZoom = spread > 1 ? 9 : spread > 0.3 ? 11 : spread > 0.05 ? 13 : 14;
+    const poll = setInterval(() => {
+      const map = mapRef.current;
+      if (!map || destroyed) return;
 
-    setTimeout(() => {
-      map.flyTo({
-        center: [centerLng, centerLat],
-        zoom: targetZoom,
-        duration: 3000,
-        essential: true,
+      try {
+        map.getCenter();
+      } catch {
+        return;
+      }
+
+      clearInterval(poll);
+
+      // Resize observer
+      const container = map.getContainer();
+      observer = new ResizeObserver(() => map.resize());
+      observer.observe(container);
+      map.resize();
+
+      const t = targetRef.current;
+      const locs = locationsRef.current;
+
+      // FlyTo
+      allTimers.push(
+        setTimeout(() => {
+          if (destroyed) return;
+          map.resize();
+          allTimers.push(
+            setTimeout(() => {
+              if (destroyed) return;
+              map.flyTo({
+                center: t.center,
+                zoom: t.zoom,
+                duration: 2500,
+                essential: true,
+              });
+            }, 300)
+          );
+        }, 100)
+      );
+
+      // Native markers with staggered reveal
+      locs.forEach((loc, i) => {
+        const el = createPinElement(loc.isMain);
+        const marker = new MapLibreGL.Marker({ element: el, anchor: "bottom" })
+          .setLngLat([loc.lng, loc.lat])
+          .addTo(map);
+        markers.push(marker);
+
+        allTimers.push(
+          setTimeout(() => {
+            if (destroyed) return;
+            el.style.opacity = "1";
+            el.style.transform = "translateY(0) scale(1)";
+          }, 2500 + i * 500)
+        );
       });
-    }, 500);
-  }, [map, isLoaded, isActive, locations]);
+    }, 100);
 
-  return null;
-}
-
-function DelayedPin({ location, delay, isActive }: { location: BusinessLocation; delay: number; isActive: boolean }) {
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (!isActive) return;
-    const t = setTimeout(() => setShow(true), delay);
-    return () => clearTimeout(t);
-  }, [isActive, delay]);
-
-  return (
-    <div
-      className="flex flex-col items-center transition-all duration-300"
-      style={{ opacity: show ? 1 : 0, transform: show ? "translateY(0)" : "translateY(-16px)" }}
-    >
-      <MapPin
-        className={
-          location.isMain
-            ? "w-8 h-8 text-[#625CE4] drop-shadow-md"
-            : "w-6 h-6 text-gray-500 drop-shadow-sm"
-        }
-        fill="currentColor"
-        strokeWidth={1.5}
-      />
-    </div>
-  );
-}
-
-export function MapAnimation({ locations, isActive, businessName }: MapAnimationProps) {
-  const centerLat = locations.reduce((sum, l) => sum + l.lat, 0) / locations.length;
-  const centerLng = locations.reduce((sum, l) => sum + l.lng, 0) / locations.length;
-
-  const mainLocation = locations.find((l) => l.isMain) ?? locations[0];
-  const searchText = `${mainLocation.name} in ${mainLocation.address.split(",").slice(-2).join(",").trim()}`;
+    return () => {
+      destroyed = true;
+      clearInterval(poll);
+      allTimers.forEach(clearTimeout);
+      markers.forEach((m) => m.remove());
+      observer?.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="w-full h-full relative overflow-hidden font-sans">
-      {/* Google-style search bar — centered in visible area past sidebar */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={isActive ? { opacity: 1, y: 0 } : {}}
-        transition={{ delay: 0.2, duration: 0.4 }}
-        className="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-full max-w-md px-6"
-      >
-        <Card className="px-4 py-2.5 shadow-lg">
-          <div className="flex items-center gap-3">
-            <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm text-foreground truncate">
-              <TypewriterText text={searchText} delay={0.8} />
-            </span>
-          </div>
-        </Card>
-      </motion.div>
-
-      {/* Non-interactive map */}
       <div className="w-full h-full" style={{ pointerEvents: "none" }}>
         <Map
-          center={[centerLng, centerLat]}
+          ref={mapRef}
+          center={target.center}
           zoom={3}
           theme="light"
           className="w-full h-full"
           interactive={false}
-        >
-          <FlyToAnimation locations={locations} isActive={isActive} />
-
-          {locations.map((location, i) => (
-            <MapMarker
-              key={location.id}
-              longitude={location.lng}
-              latitude={location.lat}
-              anchor="bottom"
-            >
-              <DelayedPin location={location} delay={2500 + i * 500} isActive={isActive} />
-            </MapMarker>
-          ))}
-        </Map>
+        />
       </div>
 
       {/* Scanning pulse overlay */}
