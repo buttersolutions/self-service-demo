@@ -26,6 +26,7 @@ export function LocationAutocomplete({
       displayName: place.name ?? "",
       formattedAddress: place.formatted_address ?? "",
       websiteUri: place.website,
+      types: place.types,
       location: {
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
@@ -47,11 +48,30 @@ export function LocationAutocomplete({
           "formatted_address",
           "website",
           "geometry.location",
+          "types",
         ],
       });
 
       ac.addListener("place_changed", handlePlaceChanged);
       autocompleteRef.current = ac;
+
+      // Bias autocomplete to user's location via browser geolocation
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            const bias = new google.maps.Circle({
+              center: { lat: latitude, lng: longitude },
+              radius: 50000,
+            });
+            ac.setBounds(bias.getBounds()!);
+          },
+          () => {
+            // Geolocation denied — fall back to IP-based bias (Google default)
+          }
+        );
+      }
+
       return true;
     }
 

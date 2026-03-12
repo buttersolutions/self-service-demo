@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDemoFlow } from "@/lib/demo-flow-context";
 import { LocationDetailsCard } from "@/components/demo/location-details-card";
+import { CompanyInsights } from "@/components/demo/company-insights";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PlaceDetailsResponse } from "@/lib/types";
 
@@ -52,16 +53,29 @@ export default function InsightsPage() {
     fetchDetails();
   }, [state.confirmedLocations, state.locationDetails.length, dispatch, router]);
 
+  // Extract domain from selected place for Saber insights
+  const companyDomain = (() => {
+    const uri = state.selectedPlace?.websiteUri;
+    if (!uri) return null;
+    try {
+      return new URL(uri).hostname.replace("www.", "");
+    } catch {
+      return null;
+    }
+  })();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Reviews &amp; Photos</h1>
+        <h1 className="text-2xl font-semibold">Location Intelligence</h1>
         <p className="mt-2 text-muted-foreground">
-          See what customers are saying across your{" "}
+          AI-powered insights and reviews across your{" "}
           {state.confirmedLocations.length} location
           {state.confirmedLocations.length !== 1 && "s"}.
         </p>
       </div>
+
+      {companyDomain && <CompanyInsights domain={companyDomain} />}
 
       {loading && (
         <div className="space-y-6">

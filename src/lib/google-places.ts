@@ -24,31 +24,83 @@ async function placesRequest(path: string, fieldMask: string, body?: object) {
 
 // --- Text Search: find chain locations ---
 
+const FIELD_MASK =
+  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location";
+
+async function textSearch(body: Record<string, unknown>): Promise<PlaceSummary[]> {
+  const data = await placesRequest("/places:searchText", FIELD_MASK, body);
+  return (data.places ?? []).map(mapPlace);
+}
+
+function brandFilter(websiteDomain: string) {
+  const brandName = websiteDomain.split(".")[0];
+  return (p: PlaceSummary) => {
+    if (!p.websiteUri) return false;
+    try {
+      return new URL(p.websiteUri).hostname.replace("www.", "").includes(brandName);
+    } catch {
+      return false;
+    }
+  };
+}
+
 export async function searchPlaces(
   query: string,
-  websiteDomain?: string
+  websiteDomain?: string,
+  locationBias?: { lat: number; lng: number; radiusMeters?: number }
 ): Promise<PlaceSummary[]> {
-  const data = await placesRequest(
-    "/places:searchText",
-    "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location",
-    { textQuery: query }
-  );
+  const body: Record<string, unknown> = { textQuery: query, maxResultCount: 20 };
 
-  const places: PlaceSummary[] = (data.places ?? []).map(mapPlace);
-
-  if (websiteDomain) {
-    return places.filter((p) => {
-      if (!p.websiteUri) return false;
-      try {
-        const domain = new URL(p.websiteUri).hostname.replace("www.", "");
-        return domain === websiteDomain || domain.endsWith(`.${websiteDomain}`);
-      } catch {
-        return false;
-      }
-    });
+  if (locationBias) {
+    body.locationBias = {
+      circle: {
+        center: { latitude: locationBias.lat, longitude: locationBias.lng },
+        radius: locationBias.radiusMeters ?? 500000,
+      },
+    };
   }
 
-  return places;
+  if (!websiteDomain) {
+    return textSearch(body);
+  }
+
+  // For chain discovery: run parallel regional searches to overcome
+  // Google's tendency to return few results for short global queries.
+  // Extract country from the selected place's address if available,
+  // but also run a global search. Dedupe by placeId.
+  const filter = brandFilter(websiteDomain);
+
+  // Run the query both as-is and with just the brand name, across regions.
+  // Google Text Search returns inconsistent results for short chain names,
+  // so we cast a wide net and filter by domain.
+  const brandName = websiteDomain.split(".")[0];
+  const queries = [query, brandName !== query.toLowerCase() ? brandName : null].filter(Boolean) as string[];
+
+  const regions = [
+    {}, // global
+    { locationRestriction: { rectangle: { low: { latitude: 35, longitude: -11 }, high: { latitude: 71, longitude: 40 } } } }, // Europe
+  ];
+
+  const searches = queries.flatMap((q) =>
+    regions.map((region) =>
+      textSearch({ ...body, ...region, textQuery: q }).catch(() => [] as PlaceSummary[])
+    )
+  );
+
+  const results = await Promise.all(searches);
+
+  const seen = new Set<string>();
+  const deduped: PlaceSummary[] = [];
+  for (const batch of results) {
+    for (const place of batch) {
+      if (!seen.has(place.placeId)) {
+        seen.add(place.placeId);
+        deduped.push(place);
+      }
+    }
+  }
+
+  return deduped.filter(filter);
 }
 
 // --- Place Details: reviews + photos ---

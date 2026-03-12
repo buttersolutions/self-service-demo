@@ -7,6 +7,21 @@ import { ChainLocationList } from "@/components/demo/chain-location-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PlaceSummary, TextSearchResponse } from "@/lib/types";
 
+// Google generic types we don't want in the query
+const IGNORED_TYPES = new Set([
+  "establishment",
+  "point_of_interest",
+  "food",
+  "store",
+]);
+
+function buildChainQuery(place: PlaceSummary): string {
+  const name = place.displayName;
+  // Find a useful type to append (e.g. "bar", "restaurant", "cafe")
+  const typeHint = place.types?.find((t) => !IGNORED_TYPES.has(t));
+  return typeHint ? `${name} ${typeHint.replace(/_/g, " ")}` : name;
+}
+
 export default function ChainPage() {
   const { state, dispatch } = useDemoFlow();
   const router = useRouter();
@@ -27,7 +42,18 @@ export default function ChainPage() {
         const res = await fetch("/api/places/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: state.selectedPlace!.displayName }),
+          body: JSON.stringify({
+            query: buildChainQuery(state.selectedPlace!),
+            ...(state.selectedPlace!.websiteUri && {
+              websiteDomain: (() => {
+                try {
+                  return new URL(state.selectedPlace!.websiteUri!).hostname.replace("www.", "");
+                } catch {
+                  return undefined;
+                }
+              })(),
+            }),
+          }),
         });
 
         if (!res.ok) throw new Error("Search failed");

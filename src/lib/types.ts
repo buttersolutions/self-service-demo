@@ -5,6 +5,7 @@ export interface PlaceSummary {
   displayName: string;
   formattedAddress: string;
   websiteUri?: string;
+  types?: string[];
   location: {
     lat: number;
     lng: number;
@@ -37,6 +38,11 @@ export interface PlaceDetails extends PlaceSummary {
 export interface TextSearchRequest {
   query: string;
   websiteDomain?: string;
+  locationBias?: {
+    lat: number;
+    lng: number;
+    radiusMeters?: number;
+  };
 }
 
 export interface TextSearchResponse {

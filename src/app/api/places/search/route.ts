@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const places = await searchPlaces(body.query, body.websiteDomain);
+    const places = await searchPlaces(body.query, body.websiteDomain, body.locationBias);
 
     return NextResponse.json({ places } satisfies TextSearchResponse);
   } catch (err) {
