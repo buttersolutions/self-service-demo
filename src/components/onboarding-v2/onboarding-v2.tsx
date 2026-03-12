@@ -5,10 +5,34 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
-import { StepUrlInput, StepConfirmBusiness, StepConfirmLocations } from './steps';
-import { lookupBusiness, type MockBusinessV2, type BusinessLocationV2 } from '@/lib/mock-data-v2';
+import { StepSearch, StepConfirmBusiness, StepConfirmLocations } from './steps';
+import type { BusinessData } from './steps/step-confirm-business';
+import type { LocationItem } from './steps/step-confirm-locations';
+import type { PlaceSummary, TextSearchResponse } from '@/lib/types';
 
-type Step = 'url' | 'confirm-business' | 'confirm-locations';
+type Step = 'search' | 'confirm-business' | 'confirm-locations';
+
+const IGNORED_TYPES = new Set([
+  'establishment',
+  'point_of_interest',
+  'food',
+  'store',
+]);
+
+function buildChainQuery(place: PlaceSummary): string {
+  const name = place.displayName;
+  const typeHint = place.types?.find((t) => !IGNORED_TYPES.has(t));
+  return typeHint ? `${name} ${typeHint.replace(/_/g, ' ')}` : name;
+}
+
+function extractDomain(websiteUri?: string): string | undefined {
+  if (!websiteUri) return undefined;
+  try {
+    return new URL(websiteUri).hostname.replace('www.', '');
+  } catch {
+    return undefined;
+  }
+}
 
 const floatRocket = {
   y: [0, -6, 0],
@@ -23,11 +47,11 @@ const floatPineapple = {
 };
 
 export function OnboardingV2() {
-  const [step, setStep] = useState<Step>('url');
+  const [step, setStep] = useState<Step>('search');
   const [loading, setLoading] = useState(false);
-  const [url, setUrl] = useState('');
-  const [business, setBusiness] = useState<MockBusinessV2 | null>(null);
-  const [businessName, setBusinessName] = useState('');
+  const [selectedPlace, setSelectedPlace] = useState<PlaceSummary | null>(null);
+  const [business, setBusiness] = useState<BusinessData | null>(null);
+  const [locations, setLocations] = useState<LocationItem[]>([]);
   const directionRef = useRef(1);
 
   const goForward = (next: Step) => {
@@ -40,28 +64,65 @@ export function OnboardingV2() {
     setStep(prev);
   };
 
-  const handleUrlSubmit = useCallback(async (submittedUrl: string) => {
-    setUrl(submittedUrl);
+  const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
+    setSelectedPlace(place);
     setLoading(true);
-    const result = await lookupBusiness(submittedUrl);
-    setBusiness(result);
-    setBusinessName(result.name);
-    setLoading(false);
-    goForward('confirm-business');
+
+    const domain = extractDomain(place.websiteUri);
+
+    try {
+      const [chainResult, brandResult] = await Promise.all([
+        fetch('/api/places/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: buildChainQuery(place),
+            ...(domain && { websiteDomain: domain }),
+          }),
+        }).then((res) => res.json() as Promise<TextSearchResponse>),
+
+        domain
+          ? fetch('/api/brand', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ domain }),
+            }).then((res) => res.json())
+          : Promise.resolve({ name: null, logoUrl: null, colors: ['#FFFFFF'] }),
+      ]);
+
+      const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => ({
+        id: p.placeId,
+        name: p.displayName,
+        address: p.formattedAddress,
+      }));
+
+      setLocations(chainLocations);
+
+      setBusiness({
+        name: brandResult.name ?? place.displayName,
+        logoUrl: brandResult.logoUrl ?? null,
+        domain: domain ?? '',
+        brandColors: brandResult.colors ?? ['#FFFFFF'],
+      });
+
+      setLoading(false);
+      goForward('confirm-business');
+    } catch {
+      setLoading(false);
+    }
   }, []);
 
   const handleBusinessConfirm = useCallback(
     (data: { name: string; website: string; colors: string[] }) => {
-      setBusinessName(data.name);
       if (business) {
-        setBusiness({ ...business, domain: data.website, brandColors: data.colors });
+        setBusiness({ ...business, name: data.name, domain: data.website, brandColors: data.colors });
       }
       goForward('confirm-locations');
     },
     [business],
   );
 
-  const handleLocationsConfirm = useCallback((_locations: BusinessLocationV2[]) => {
+  const handleLocationsConfirm = useCallback((_locs: LocationItem[]) => {
     // Future: advance to next step
   }, []);
 
@@ -69,12 +130,12 @@ export function OnboardingV2() {
     if (step === 'confirm-locations') {
       goBack('confirm-business');
     } else if (step === 'confirm-business') {
-      goBack('url');
+      goBack('search');
       setLoading(false);
     }
   }, [step]);
 
-  const showBack = step !== 'url';
+  const showBack = step !== 'search';
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-dvh bg-gray-50/40 py-12 font-sans overflow-hidden">
@@ -95,7 +156,7 @@ export function OnboardingV2() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {step === 'url' && (
+        {step === 'search' && (
           <motion.div
             key="allgravy-logo"
             className="fixed top-12 left-1/2 -translate-x-1/2 z-10 pointer-events-none"
@@ -110,12 +171,12 @@ export function OnboardingV2() {
       </AnimatePresence>
 
       <AnimatePresence mode="wait" custom={directionRef.current}>
-        {step === 'url' && (
-          <StepUrlInput
-            key="step-url"
+        {step === 'search' && (
+          <StepSearch
+            key="step-search"
             direction={directionRef.current}
-            initialUrl={url}
-            onSubmit={handleUrlSubmit}
+            initialPlace={selectedPlace}
+            onSubmit={handleSearchSubmit}
             loading={loading}
           />
         )}
@@ -124,16 +185,16 @@ export function OnboardingV2() {
           <StepConfirmBusiness
             key="step-confirm-business"
             direction={directionRef.current}
-            business={{ ...business, name: businessName }}
+            business={business}
             onConfirm={handleBusinessConfirm}
           />
         )}
 
-        {step === 'confirm-locations' && business && (
+        {step === 'confirm-locations' && (
           <StepConfirmLocations
             key="step-confirm-locations"
             direction={directionRef.current}
-            locations={business.locations}
+            locations={locations}
             onConfirm={handleLocationsConfirm}
           />
         )}

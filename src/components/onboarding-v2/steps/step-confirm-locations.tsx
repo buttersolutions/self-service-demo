@@ -3,15 +3,20 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X } from 'lucide-react';
-import { OnboardingInput, OnboardingButton, PaginationDots } from '../ui';
+import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import { Button } from '@/components/ui/button';
-import type { BusinessLocationV2 } from '@/lib/mock-data-v2';
+
+export interface LocationItem {
+  id: string;
+  name: string;
+  address: string;
+}
 
 interface StepConfirmLocationsProps {
   direction: number;
-  locations: BusinessLocationV2[];
-  onConfirm: (locations: BusinessLocationV2[]) => void;
+  locations: LocationItem[];
+  onConfirm: (locations: LocationItem[]) => void;
 }
 
 const itemVariants = {
@@ -27,7 +32,7 @@ export function StepConfirmLocations({
   locations: initialLocations,
   onConfirm,
 }: StepConfirmLocationsProps) {
-  const [locations, setLocations] = useState<BusinessLocationV2[]>(initialLocations);
+  const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
 
   const updateName = (id: string, newName: string) => {
     setLocations((prev) =>
@@ -51,21 +56,26 @@ export function StepConfirmLocations({
 
   return (
     <motion.div
-      className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8"
+      className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8 max-h-[calc(100dvh-96px)]"
       custom={direction}
       variants={stepVariants}
       initial="initial"
       animate="animate"
       exit="exit"
     >
-      <motion.h1
-        className="text-[22px] font-medium text-gray-900 tracking-[-0.01em] mb-8 w-full text-left"
+      <motion.div className="w-full mb-6 shrink-0" variants={childVariants}>
+        <h1 className="text-[22px] font-bold text-gray-900 tracking-[-0.01em] font-serif">
+          3. Confirm your locations
+        </h1>
+        <p className="text-[14px] text-gray-500 mt-2 leading-relaxed">
+          We found <span className="font-semibold text-gray-700">{initialLocations.length} locations</span> matching your business. They will be set up as workplaces in the app. Feel free to rename, remove, or add any that are missing.
+        </p>
+      </motion.div>
+
+      <motion.div
+        className="w-full overflow-y-auto min-h-0 space-y-3 pr-1 pb-4"
         variants={childVariants}
       >
-        Confirm your locations
-      </motion.h1>
-
-      <motion.div className="w-full space-y-3" variants={childVariants}>
         <AnimatePresence initial={false}>
           {locations.map((loc, i) => (
             <motion.div
@@ -101,14 +111,13 @@ export function StepConfirmLocations({
         </motion.button>
       </motion.div>
 
-      <motion.div className="w-full mt-6" variants={childVariants}>
+      <motion.div
+        className="w-full shrink-0 sticky bottom-0 z-10 bg-white rounded-2xl p-4 mt-4"
+        variants={childVariants}
+      >
         <OnboardingButton active={valid} disabled={!valid} onClick={() => onConfirm(locations)}>
-          Confirm locations
+          Get my branded app
         </OnboardingButton>
-      </motion.div>
-
-      <motion.div variants={childVariants}>
-        <PaginationDots total={3} current={2} className="mt-auto pt-16" />
       </motion.div>
     </motion.div>
   );

@@ -4,11 +4,17 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { OnboardingInput, OnboardingButton, PaginationDots } from '../ui';
 import { stepVariants, childVariants, popVariants } from '../constants';
-import type { MockBusinessV2 } from '@/lib/mock-data-v2';
+
+export interface BusinessData {
+  name: string;
+  logoUrl: string | null;
+  domain: string;
+  brandColors: string[];
+}
 
 interface StepConfirmBusinessProps {
   direction: number;
-  business: MockBusinessV2;
+  business: BusinessData;
   onConfirm: (data: { name: string; website: string; colors: string[] }) => void;
 }
 
@@ -47,7 +53,7 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
         ) : (
           <div
             className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
-            style={{ backgroundColor: colors[0] ?? '#625CE4' }}
+            style={{ backgroundColor: colors[0] === '#FFFFFF' ? '#625CE4' : colors[0] }}
           >
             {business.name.charAt(0)}
           </div>
@@ -55,10 +61,10 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
       </motion.div>
 
       <motion.h1
-        className="text-[22px] font-medium text-gray-900 tracking-[-0.01em] mb-6 w-full text-center"
+        className="text-[22px] font-bold text-gray-900 tracking-[-0.01em] mb-6 w-full text-center font-serif"
         variants={childVariants}
       >
-        Confirm your business details
+        2.Confirm your business details
       </motion.h1>
 
       <div className="w-full space-y-4">
@@ -80,21 +86,23 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
           />
         </motion.div>
 
-        <motion.div variants={childVariants}>
-          <label className="block text-[13px] text-gray-500 mb-1.5 ml-1">Brand colors</label>
-          <div className="flex items-center gap-3">
-            {colors.map((color, i) => (
-              <motion.div
-                key={i}
-                className="size-11 rounded-full border-[2.5px] border-white ring-1 ring-black/[0.08]"
-                style={{ backgroundColor: color }}
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.35 + i * 0.08, type: 'spring', stiffness: 400, damping: 20 }}
-              />
-            ))}
-          </div>
-        </motion.div>
+        {colors.some((c) => c !== '#FFFFFF') && (
+          <motion.div variants={childVariants}>
+            <label className="block text-[13px] text-gray-500 mb-1.5 ml-1">Brand colors</label>
+            <div className="flex items-center gap-3">
+              {colors.map((color, i) => (
+                <motion.div
+                  key={i}
+                  className="size-11 rounded-full border-[2.5px] border-white ring-1 ring-black/[0.08]"
+                  style={{ backgroundColor: color }}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.35 + i * 0.08, type: 'spring', stiffness: 400, damping: 20 }}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
       </div>
 
       <motion.div className="w-full mt-6" variants={childVariants}>
