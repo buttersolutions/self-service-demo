@@ -1,17 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
 import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import { Button } from '@/components/ui/button';
 
-export interface LocationItem {
-  id: string;
-  name: string;
-  address: string;
-}
+import type { LocationItem } from '../types';
+
+const BUTTON_LOADING_MS = 3000;
 
 interface StepConfirmLocationsProps {
   direction: number;
@@ -33,6 +31,12 @@ export function StepConfirmLocations({
   onConfirm,
 }: StepConfirmLocationsProps) {
   const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
+  const [buttonLoading, setButtonLoading] = useState(false);
+
+  const handleGetApp = useCallback(() => {
+    setButtonLoading(true);
+    setTimeout(() => onConfirm(locations), BUTTON_LOADING_MS);
+  }, [locations, onConfirm]);
 
   const updateName = (id: string, newName: string) => {
     setLocations((prev) =>
@@ -48,7 +52,7 @@ export function StepConfirmLocations({
     nextId += 1;
     setLocations((prev) => [
       ...prev,
-      { id: `loc-new-${nextId}`, name: '', address: '' },
+      { id: `loc-new-${nextId}`, name: '', address: '', lat: 0, lng: 0 },
     ]);
   };
 
@@ -93,6 +97,9 @@ export function StepConfirmLocations({
                   onChange={(e) => updateName(loc.id, e.target.value)}
                   placeholder="Location name"
                 />
+                {loc.address && (
+                  <p className="text-[11px] text-gray-400 mt-0.5 ml-1 truncate">{loc.address}</p>
+                )}
               </div>
               <Button variant="ghost" size="icon" onClick={() => removeLocation(loc.id)}>
                 <X className="size-4" />
@@ -112,11 +119,18 @@ export function StepConfirmLocations({
       </motion.div>
 
       <motion.div
-        className="w-full shrink-0 sticky bottom-0 z-10 bg-white rounded-2xl p-4 mt-4"
+        className="w-full shrink-0 sticky bottom-0 z-10 bg-white rounded-2xl py-4 mt-4"
         variants={childVariants}
       >
-        <OnboardingButton active={valid} disabled={!valid} onClick={() => onConfirm(locations)}>
-          Get my branded app
+        <OnboardingButton active={valid} disabled={!valid || buttonLoading} onClick={handleGetApp}>
+          {buttonLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="size-4 animate-spin" />
+              Preparing...
+            </span>
+          ) : (
+            'Get my branded app'
+          )}
         </OnboardingButton>
       </motion.div>
     </motion.div>
