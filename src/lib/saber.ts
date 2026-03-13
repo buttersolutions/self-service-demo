@@ -56,7 +56,13 @@ export const DEMO_SIGNALS: SignalDef[] = [
   {
     label: "Business Description",
     question:
-      "Provide a concise description of this company's business — what they do, who they serve, and what makes them distinctive.",
+      "Provide a detailed description of this company's business — what they do, who they serve, what makes them distinctive, and where they operate. Do not truncate or abbreviate the answer.",
+    answerType: "open_text",
+  },
+  {
+    label: "Business Vertical",
+    question:
+      "What specific industry vertical or business type is this company? Be specific (e.g., fast-casual restaurant, boutique fitness studio, dental practice, coffee shop chain). Return only the category.",
     answerType: "open_text",
   },
   {
@@ -71,6 +77,18 @@ export const DEMO_SIGNALS: SignalDef[] = [
     answerType: "number",
   },
   {
+    label: "Target Audience",
+    question:
+      "Describe this company's target audience and typical customer profile. Include demographics, preferences, and what draws customers to this business. Do not truncate or abbreviate the answer.",
+    answerType: "open_text",
+  },
+  {
+    label: "Competitive Advantages",
+    question:
+      "What are this company's key competitive advantages or unique selling points compared to others in the same space? List the top 3-5 differentiators.",
+    answerType: "list",
+  },
+  {
     label: "News Coverage",
     question:
       "What are the most notable recent news stories or press coverage about this company? List up to 5 items with publication and headline.",
@@ -79,8 +97,14 @@ export const DEMO_SIGNALS: SignalDef[] = [
   {
     label: "Review Sentiment",
     question:
-      "Analyze the overall sentiment in customer reviews for this company. Focus on recurring negative themes around customer experience — service quality, wait times, staff, cleanliness, value for money. Summarise key positives and negatives.",
+      "Analyze the overall sentiment in customer reviews for this company. Focus on recurring themes around customer experience — service quality, wait times, staff, cleanliness, value for money. Summarise key positives and negatives. Do not truncate or abbreviate the answer.",
     answerType: "open_text",
+  },
+  {
+    label: "Growth Indicators",
+    question:
+      "List any evidence of growth in the last 12 months: job postings, new location openings, planned expansions, fundraising, press about growth. Be specific with dates and details.",
+    answerType: "list",
   },
 ];
 
@@ -94,7 +118,7 @@ export const DATA_TEST_SIGNALS: SignalDef[] = [
   {
     label: "Business Description",
     question:
-      "Provide a concise description of this company's business — what they do, who they serve, and what makes them distinctive.",
+      "Provide a detailed description of this company's business — what they do, who they serve, what makes them distinctive, and where they operate. Do not truncate or abbreviate the answer.",
     answerType: "open_text",
   },
   {
