@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PlacePhoto } from '@/lib/types';
 
@@ -10,6 +10,7 @@ interface GatheringPhotosProps {
   brandColors: string[];
   businessName: string;
   isActive: boolean;
+  onAllPhotosShown?: () => void;
 }
 
 type PhotoLayout = { x: number; y: number; w: number; h: number; rotate: number; z: number };
@@ -85,13 +86,16 @@ export function GatheringPhotos({
   brandColors,
   businessName,
   isActive,
+  onAllPhotosShown,
 }: GatheringPhotosProps) {
   const [visiblePhotos, setVisiblePhotos] = useState(0);
   const displayPhotos = photos.slice(0, 16);
+  const calledRef = useRef(false);
 
   useEffect(() => {
     if (!isActive || displayPhotos.length === 0) return;
     setVisiblePhotos(0);
+    calledRef.current = false;
 
     let count = 0;
     const interval = setInterval(() => {
@@ -99,11 +103,15 @@ export function GatheringPhotos({
       setVisiblePhotos(count);
       if (count >= displayPhotos.length) {
         clearInterval(interval);
+        if (!calledRef.current) {
+          calledRef.current = true;
+          onAllPhotosShown?.();
+        }
       }
     }, 400);
 
     return () => clearInterval(interval);
-  }, [isActive, displayPhotos.length]);
+  }, [isActive, displayPhotos.length, onAllPhotosShown]);
 
   return (
     <div className="w-full h-full flex items-center justify-center overflow-hidden">

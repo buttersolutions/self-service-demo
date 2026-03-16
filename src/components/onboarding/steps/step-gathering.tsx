@@ -117,6 +117,7 @@ export function StepGathering({
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [completedPhaseIds, setCompletedPhaseIds] = useState<Set<string>>(new Set());
   const [autoAdvance, setAutoAdvance] = useState(true);
+  const [photosAllShown, setPhotosAllShown] = useState(false);
   const phaseStartRef = useRef(Date.now());
   const completedRef = useRef(false);
   const prevPhaseRef = useRef(0);
@@ -128,6 +129,9 @@ export function StepGathering({
   const direction = currentPhaseIndex >= prevPhaseRef.current ? 1 : -1;
   useEffect(() => {
     prevPhaseRef.current = currentPhaseIndex;
+    if (PHASES[currentPhaseIndex]?.id !== 'photos') {
+      setPhotosAllShown(false);
+    }
   }, [currentPhaseIndex]);
 
   // Mark branded-app (last phase) as completed immediately when we land on it
@@ -225,6 +229,10 @@ export function StepGathering({
     }
   }, [currentPhaseIndex, onComplete]);
 
+  const handlePhotosAllShown = useCallback(() => {
+    setPhotosAllShown(true);
+  }, []);
+
   // Auto-navigate from report to branded-app when data is fully loaded
   const handleReportComplete = useCallback(() => {
     if (autoAdvance) {
@@ -251,6 +259,7 @@ export function StepGathering({
             brandColors={business.brandColors}
             businessName={businessName}
             isActive
+            onAllPhotosShown={handlePhotosAllShown}
           />
         );
       case 'report':
@@ -320,8 +329,8 @@ export function StepGathering({
           </motion.div>
         </AnimatePresence>
 
-        {/* Scan line — on map, reviews, and photos */}
-        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews' || currentPhase.id === 'photos') && (
+        {/* Scan line — on map, reviews, and photos (photos: only after all shown, 2 sweeps) */}
+        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews') && (
           <motion.div
             key={`scan-${currentPhase.id}`}
             className="absolute left-0 right-0 h-[2px] z-20 pointer-events-none"
@@ -333,6 +342,20 @@ export function StepGathering({
             initial={{ top: 0, opacity: 0 }}
             animate={{ top: '100%', opacity: [0, 1, 1, 0] }}
             transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+          />
+        )}
+        {currentPhase.id === 'photos' && photosAllShown && (
+          <motion.div
+            key="scan-photos-done"
+            className="absolute left-0 right-0 h-[2px] z-20 pointer-events-none"
+            style={{
+              background:
+                'linear-gradient(90deg, transparent 0%, rgba(98, 92, 228, 0.5) 30%, rgba(98, 92, 228, 0.8) 50%, rgba(98, 92, 228, 0.5) 70%, transparent 100%)',
+              boxShadow: '0 0 20px 4px rgba(98, 92, 228, 0.15)',
+            }}
+            initial={{ top: 0, opacity: 0 }}
+            animate={{ top: '100%', opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 1.5, repeat: 1, ease: 'linear' }}
           />
         )}
 

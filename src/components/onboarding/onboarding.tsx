@@ -216,20 +216,31 @@ export function Onboarding() {
           : Promise.resolve({ name: null, logoUrl: null, colors: ['#FFFFFF'] }),
       ]);
 
-      const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => ({
-        id: p.placeId,
-        name: p.displayName,
-        address: p.formattedAddress,
-        countryCode: p.countryCode,
-        lat: p.location.lat,
-        lng: p.location.lng,
-      }));
+      const brandName = brandResult.name ?? place.displayName;
+
+      const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
+        // Extract street name without number from the first segment of the address
+        const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
+        const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
+        const locationLabel = streetName
+          ? `${brandName} - ${streetName}`
+          : p.displayName;
+
+        return {
+          id: p.placeId,
+          name: locationLabel,
+          address: p.formattedAddress,
+          countryCode: p.countryCode,
+          lat: p.location.lat,
+          lng: p.location.lng,
+        };
+      });
 
       setLocations(chainLocations);
       domainRef.current = domain;
 
       setBusiness({
-        name: brandResult.name ?? place.displayName,
+        name: brandName,
         logoUrl: brandResult.logoUrl ?? null,
         domain: domain ?? '',
         brandColors: brandResult.colors ?? ['#FFFFFF'],

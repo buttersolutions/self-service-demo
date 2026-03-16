@@ -101,13 +101,14 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
         timers.push(
           setTimeout(() => {
             if (destroyed) return;
+            map.resize();
             map.flyTo({
               center: [locs[0].lng, locs[0].lat],
               zoom: 14,
               duration: 1400,
               essential: true,
             });
-          }, 300),
+          }, 400),
         );
       } else if (locs.length > 1) {
         const bounds = new MapLibreGL.LngLatBounds();
@@ -116,13 +117,14 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
         timers.push(
           setTimeout(() => {
             if (destroyed) return;
+            map.resize();
             map.fitBounds(bounds, {
               padding: { top: 80, bottom: 80, left: 300, right: 60 },
               duration: 1500,
               maxZoom: 14,
               essential: true,
             });
-          }, 300),
+          }, 400),
         );
       }
 
