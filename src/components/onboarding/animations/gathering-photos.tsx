@@ -100,7 +100,7 @@ export function GatheringPhotos({
       if (count >= displayPhotos.length) {
         clearInterval(interval);
       }
-    }, 180);
+    }, 400);
 
     return () => clearInterval(interval);
   }, [isActive, displayPhotos.length]);

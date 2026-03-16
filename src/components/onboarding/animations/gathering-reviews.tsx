@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star } from 'lucide-react';
+import { Star, ThumbsUp, ThumbsDown } from 'lucide-react';
 import type { ReviewItem } from '../types';
 
 interface GatheringReviewsProps {
@@ -132,7 +132,14 @@ export function GatheringReviews({ reviews, isActive }: GatheringReviewsProps) {
                         <span className="text-[13px] font-medium text-gray-700 block truncate">
                           {review.author ?? 'Anonymous'}
                         </span>
-                        <StarRating rating={review.rating} />
+                        <div className="flex items-center gap-1.5">
+                          <StarRating rating={review.rating} />
+                          {review.rating >= 4 ? (
+                            <ThumbsUp className="size-3.5 text-green-400" />
+                          ) : review.rating <= 2 ? (
+                            <ThumbsDown className="size-3.5 text-red-400" />
+                          ) : null}
+                        </div>
                       </div>
                       {review.date && (
                         <span className="text-[10px] text-gray-300 shrink-0">{review.date}</span>

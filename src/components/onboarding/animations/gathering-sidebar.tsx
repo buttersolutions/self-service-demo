@@ -101,7 +101,7 @@ export function GatheringSidebar({
                   isCurrent ? 'bg-gray-50' : ''
                 }`}
               >
-                <div className="shrink-0 relative mt-0.5">
+                <div className="shrink-0 relative mt-px">
                   {isCompleted ? (
                     <>
                       <motion.div
