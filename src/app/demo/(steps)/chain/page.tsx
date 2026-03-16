@@ -7,7 +7,6 @@ import { ChainLocationList } from "@/components/demo/chain-location-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PlaceSummary, TextSearchResponse } from "@/lib/types";
 
-// Google generic types we don't want in the query
 const IGNORED_TYPES = new Set([
   "establishment",
   "point_of_interest",
@@ -17,7 +16,6 @@ const IGNORED_TYPES = new Set([
 
 function buildChainQuery(place: PlaceSummary): string {
   const name = place.displayName;
-  // Find a useful type to append (e.g. "bar", "restaurant", "cafe")
   const typeHint = place.types?.find((t) => !IGNORED_TYPES.has(t));
   return typeHint ? `${name} ${typeHint.replace(/_/g, " ")}` : name;
 }

@@ -58,6 +58,7 @@ interface FetchTiming {
   finishedAt: number | null;
   durationMs: number | null;
   status: 'pending' | 'done' | 'error';
+  errorMessage?: string;
 }
 
 export function Onboarding() {
@@ -84,14 +85,14 @@ export function Onboarding() {
     }));
   }, []);
 
-  const trackFetchEnd = useCallback((key: string, status: 'done' | 'error') => {
+  const trackFetchEnd = useCallback((key: string, status: 'done' | 'error', errorMessage?: string) => {
     setFetchTimings((prev) => {
       const existing = prev[key];
       if (!existing) return prev;
       const finishedAt = Date.now();
       return {
         ...prev,
-        [key]: { ...existing, finishedAt, durationMs: finishedAt - existing.startedAt, status },
+        [key]: { ...existing, finishedAt, durationMs: finishedAt - existing.startedAt, status, errorMessage },
       };
     });
   }, []);
@@ -113,18 +114,15 @@ export function Onboarding() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
         setGatheringData((prev) => ({ ...prev, insights: data.insights ?? [] }));
         trackFetchEnd('insights', 'done');
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         setGatheringData((prev) => ({ ...prev, insights: [] }));
-        trackFetchEnd('insights', 'error');
+        trackFetchEnd('insights', 'error', err instanceof Error ? err.message : 'Unknown error');
       });
 
     // Fetch Outscraper reviews — merge with any existing Google reviews
@@ -156,10 +154,9 @@ export function Onboarding() {
         });
         trackFetchEnd('reviews', 'done');
       })
-      .catch(() => {
-        // On error, keep any existing Google reviews but mark as done
+      .catch((err: unknown) => {
         setGatheringData((prev) => ({ ...prev, reviews: prev.reviews ?? [] }));
-        trackFetchEnd('reviews', 'error');
+        trackFetchEnd('reviews', 'error', err instanceof Error ? err.message : 'Unknown error');
       });
 
     trackFetchStart('enrich', 'Waterfall Enrich');
@@ -180,9 +177,9 @@ export function Onboarding() {
         }));
         trackFetchEnd('enrich', 'done');
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         setGatheringData((prev) => ({ ...prev, company: null, persons: [] }));
-        trackFetchEnd('enrich', 'error');
+        trackFetchEnd('enrich', 'error', err instanceof Error ? err.message : 'Unknown error');
       });
   }, [trackFetchStart, trackFetchEnd]);
 
@@ -436,14 +433,21 @@ function FetchTimingsDebug({ timings }: { timings: Record<string, FetchTiming> }
   if (entries.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[260px]">
+    <div className="fixed bottom-4 right-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[260px] max-w-[380px]">
       <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">API Timings</div>
       {entries.map(([key, t]) => (
-        <div key={key} className="flex items-center justify-between gap-4">
-          <span className="text-gray-300">{t.label}</span>
-          <span className={t.status === 'done' ? 'text-green-400' : t.status === 'error' ? 'text-red-400' : 'text-yellow-400'}>
-            {t.durationMs !== null ? `${(t.durationMs / 1000).toFixed(1)}s` : '...'}
-          </span>
+        <div key={key}>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-gray-300">{t.label}</span>
+            <span className={t.status === 'done' ? 'text-green-400' : t.status === 'error' ? 'text-red-400' : 'text-yellow-400'}>
+              {t.durationMs !== null ? `${(t.durationMs / 1000).toFixed(1)}s` : '...'}
+            </span>
+          </div>
+          {t.status === 'error' && t.errorMessage && (
+            <div className="text-red-400/80 text-[10px] mt-0.5 break-words leading-tight">
+              {t.errorMessage}
+            </div>
+          )}
         </div>
       ))}
     </div>

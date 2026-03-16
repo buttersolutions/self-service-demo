@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { deriveBrandPalette, isTooLight } from '@/lib/colors';
 import type { PlacePhoto } from '@/lib/types';
 
 interface GatheringBrandingProps {
@@ -44,10 +45,11 @@ export function GatheringBranding({
   photos,
   isActive,
 }: GatheringBrandingProps) {
-  const primaryColor = brandColors.find((c) => c !== '#FFFFFF') ?? '#625CE4';
-  const colors = brandColors.filter((c) => c !== '#FFFFFF');
+  const palette = deriveBrandPalette(brandColors);
+  const primaryColor = palette.primary;
+  const colors = brandColors.filter((c) => !isTooLight(c));
   if (colors.length === 0) {
-    colors.push('#625CE4', '#7C78EE', '#9B97F5');
+    colors.push(palette.primary, palette.secondary);
   }
 
   const hasPhotos = photos.length > 0;

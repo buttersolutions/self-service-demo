@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PlacePhoto } from '@/lib/types';
 
@@ -12,7 +12,9 @@ interface GatheringPhotosProps {
   isActive: boolean;
 }
 
-const PHOTO_LAYOUT: { x: number; y: number; w: number; h: number; rotate: number; z: number }[] = [
+type PhotoLayout = { x: number; y: number; w: number; h: number; rotate: number; z: number };
+
+const PHOTO_LAYOUT: PhotoLayout[] = [
   { x: 0, y: -20, w: 250, h: 180, rotate: -1, z: 16 },
   { x: -230, y: -90, w: 190, h: 140, rotate: -3.5, z: 12 },
   { x: 240, y: -70, w: 195, h: 135, rotate: 2.5, z: 13 },
@@ -31,6 +33,52 @@ const PHOTO_LAYOUT: { x: number; y: number; w: number; h: number; rotate: number
   { x: 460, y: -70, w: 130, h: 95, rotate: 5, z: 0 },
 ];
 
+function PhotoCard({ photo, layout }: { photo: PlacePhoto; layout: PhotoLayout }) {
+  const [loaded, setLoaded] = useState(false);
+  const handleLoad = useCallback(() => setLoaded(true), []);
+
+  return (
+    <motion.div
+      className="absolute rounded-xl overflow-hidden"
+      style={{
+        width: layout.w,
+        height: layout.h,
+        left: '50%',
+        top: '50%',
+        marginLeft: -layout.w / 2,
+        marginTop: -layout.h / 2,
+        zIndex: layout.z,
+        boxShadow: loaded
+          ? '0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)'
+          : 'none',
+        border: loaded ? '3px solid white' : '3px solid transparent',
+      }}
+      initial={{ opacity: 0, y: 40, rotate: 0, x: 0, scale: 0.5 }}
+      animate={{
+        opacity: loaded ? 1 : 0,
+        y: loaded ? layout.y : 40,
+        x: loaded ? layout.x : 0,
+        rotate: loaded ? layout.rotate : 0,
+        scale: loaded ? 1 : 0.5,
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 220,
+        damping: 20,
+        mass: 0.7,
+      }}
+    >
+      <img
+        src={`/api/places/photo?name=${encodeURIComponent(photo.name)}&maxWidthPx=400`}
+        alt=""
+        className="w-full h-full object-cover"
+        draggable={false}
+        onLoad={handleLoad}
+      />
+    </motion.div>
+  );
+}
+
 export function GatheringPhotos({
   photos,
   logoUrl,
@@ -47,9 +95,11 @@ export function GatheringPhotos({
 
     let count = 0;
     const interval = setInterval(() => {
-      count++;
+      count += 1;
       setVisiblePhotos(count);
-      if (count >= displayPhotos.length) clearInterval(interval);
+      if (count >= displayPhotos.length) {
+        clearInterval(interval);
+      }
     }, 180);
 
     return () => clearInterval(interval);
@@ -63,42 +113,7 @@ export function GatheringPhotos({
             if (i >= visiblePhotos) return null;
             const layout = PHOTO_LAYOUT[i % PHOTO_LAYOUT.length];
             return (
-              <motion.div
-                key={photo.name}
-                className="absolute rounded-xl overflow-hidden"
-                style={{
-                  width: layout.w,
-                  height: layout.h,
-                  left: '50%',
-                  top: '50%',
-                  marginLeft: -layout.w / 2,
-                  marginTop: -layout.h / 2,
-                  zIndex: layout.z,
-                  boxShadow: '0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
-                  border: '3px solid white',
-                }}
-                initial={{ opacity: 0, y: 40, rotate: 0, x: 0, scale: 0.5 }}
-                animate={{
-                  opacity: 1,
-                  y: layout.y,
-                  x: layout.x,
-                  rotate: layout.rotate,
-                  scale: 1,
-                }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 220,
-                  damping: 20,
-                  mass: 0.7,
-                }}
-              >
-                <img
-                  src={`/api/places/photo?name=${encodeURIComponent(photo.name)}&maxWidthPx=400`}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-              </motion.div>
+              <PhotoCard key={photo.name} photo={photo} layout={layout} />
             );
           })}
         </AnimatePresence>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Merriweather } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,9 +28,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} ${merriweather.variable} antialiased`}>
         {children}
-        <script
-          async
+        <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`}
+          strategy="afterInteractive"
         />
       </body>
     </html>

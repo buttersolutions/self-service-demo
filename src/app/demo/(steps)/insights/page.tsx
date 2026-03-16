@@ -20,7 +20,6 @@ export default function InsightsPage() {
       return;
     }
 
-    // Skip fetch if we already have details
     if (state.locationDetails.length > 0) {
       setLoading(false);
       return;
@@ -53,7 +52,6 @@ export default function InsightsPage() {
     fetchDetails();
   }, [state.confirmedLocations, state.locationDetails.length, dispatch, router]);
 
-  // Extract domain from selected place for Saber insights
   const companyDomain = (() => {
     const uri = state.selectedPlace?.websiteUri;
     if (!uri) return null;

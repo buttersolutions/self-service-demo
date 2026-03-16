@@ -30,7 +30,7 @@ function DemoShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DemoLayout({
+export default function DemoStepsLayout({
   children,
 }: {
   children: React.ReactNode;

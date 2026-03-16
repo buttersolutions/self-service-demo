@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { deriveBrandPalette } from '@/lib/colors';
 import { OnboardingButton } from '../ui';
 import type { LocationItem } from '../types';
 
@@ -17,7 +18,8 @@ export function GatheringBrandedApp({
   brandColors,
   isActive,
 }: GatheringBrandedAppProps) {
-  const primaryColor = brandColors.find((c) => c !== '#FFFFFF' && c !== '#ffffff') ?? '#625CE4';
+  const palette = deriveBrandPalette(brandColors);
+  const primaryColor = palette.primary;
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center px-6">

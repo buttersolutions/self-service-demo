@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { deriveBrandPalette, isTooLight } from '@/lib/colors';
 import { OnboardingInput, OnboardingButton, PaginationDots } from '../ui';
 import { stepVariants, childVariants, popVariants } from '../constants';
 
@@ -22,6 +23,7 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
   const [name, setName] = useState(business.name);
   const [website, setWebsite] = useState(business.domain);
   const [colors] = useState<string[]>(business.brandColors);
+  const palette = deriveBrandPalette(colors);
 
   const valid = name.trim().length > 0 && website.trim().length > 0;
 
@@ -52,8 +54,8 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
           />
         ) : (
           <div
-            className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
-            style={{ backgroundColor: colors[0] === '#FFFFFF' ? '#625CE4' : colors[0] }}
+            className="w-full h-full flex items-center justify-center text-2xl font-bold"
+            style={{ backgroundColor: palette.primary, color: palette.primaryForeground }}
           >
             {business.name.charAt(0)}
           </div>
@@ -86,7 +88,7 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
           />
         </motion.div>
 
-        {colors.some((c) => c !== '#FFFFFF') && (
+        {colors.some((c) => !isTooLight(c)) && (
           <motion.div variants={childVariants}>
             <label className="block text-[13px] text-gray-500 mb-1.5 ml-1">Brand colors</label>
             <div className="flex items-center gap-3">
