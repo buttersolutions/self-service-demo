@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { OnboardingInput, OnboardingButton } from '../ui';
@@ -25,6 +25,99 @@ const itemVariants = {
 
 let nextId = 100;
 
+function extractCountryCode(
+  place: google.maps.places.PlaceResult,
+): string | undefined {
+  const country = place.address_components?.find((c) =>
+    c.types.includes('country'),
+  );
+  return country?.short_name?.toLowerCase();
+}
+
+function AddLocationAutocomplete({
+  onPlaceSelected,
+}: {
+  onPlaceSelected: (location: LocationItem) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  const handlePlaceChanged = useCallback(() => {
+    const ac = autocompleteRef.current;
+    if (!ac) return;
+
+    const place = ac.getPlace();
+    if (!place.place_id || !place.geometry?.location) return;
+
+    nextId += 1;
+    onPlaceSelected({
+      id: place.place_id,
+      name: place.name ?? '',
+      address: place.formatted_address ?? '',
+      countryCode: extractCountryCode(place),
+      lat: place.geometry.location.lat(),
+      lng: place.geometry.location.lng(),
+    });
+
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+  }, [onPlaceSelected]);
+
+  useEffect(() => {
+    if (autocompleteRef.current) return;
+
+    function init() {
+      if (!window.google?.maps?.places || !inputRef.current) return false;
+
+      const ac = new google.maps.places.Autocomplete(inputRef.current, {
+        fields: [
+          'place_id',
+          'name',
+          'formatted_address',
+          'geometry.location',
+          'address_components',
+        ],
+      });
+
+      ac.addListener('place_changed', handlePlaceChanged);
+      autocompleteRef.current = ac;
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            const bias = new google.maps.Circle({
+              center: { lat: latitude, lng: longitude },
+              radius: 50000,
+            });
+            ac.setBounds(bias.getBounds()!);
+          },
+          () => {},
+        );
+      }
+
+      return true;
+    }
+
+    if (init()) return;
+
+    const interval = setInterval(() => {
+      if (init()) clearInterval(interval);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [handlePlaceChanged]);
+
+  return (
+    <OnboardingInput
+      ref={inputRef}
+      type="text"
+      placeholder="Search for an address to add..."
+    />
+  );
+}
+
 export function StepConfirmLocations({
   direction,
   locations: initialLocations,
@@ -32,6 +125,7 @@ export function StepConfirmLocations({
 }: StepConfirmLocationsProps) {
   const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
   const [buttonLoading, setButtonLoading] = useState(false);
+  const [showAddInput, setShowAddInput] = useState(false);
 
   const handleGetApp = useCallback(() => {
     setButtonLoading(true);
@@ -48,13 +142,13 @@ export function StepConfirmLocations({
     setLocations((prev) => prev.filter((loc) => loc.id !== id));
   };
 
-  const addLocation = () => {
-    nextId += 1;
-    setLocations((prev) => [
-      ...prev,
-      { id: `loc-new-${nextId}`, name: '', address: '', lat: 0, lng: 0 },
-    ]);
-  };
+  const addLocation = useCallback((location: LocationItem) => {
+    setLocations((prev) => {
+      if (prev.some((l) => l.id === location.id)) return prev;
+      return [...prev, location];
+    });
+    setShowAddInput(false);
+  }, []);
 
   const valid = locations.length > 0 && locations.every((loc) => loc.name.trim().length > 0);
 
@@ -89,33 +183,74 @@ export function StepConfirmLocations({
               animate="animate"
               exit="exit"
               transition={{ duration: 0.25, delay: i * 0.05 }}
-              className="flex items-center gap-2"
+              className="flex items-start gap-2"
             >
               <div className="flex-1">
-                <OnboardingInput
-                  value={loc.name}
-                  onChange={(e) => updateName(loc.id, e.target.value)}
-                  placeholder="Location name"
-                />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <OnboardingInput
+                      value={loc.name}
+                      onChange={(e) => updateName(loc.id, e.target.value)}
+                      placeholder="Location name"
+                    />
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => removeLocation(loc.id)}>
+                    <X className="size-4" />
+                  </Button>
+                </div>
                 {loc.address && (
-                  <p className="text-[11px] text-gray-400 mt-0.5 ml-1 truncate">{loc.address}</p>
+                  <p className="flex p-2 items-center gap-2 text-[11px] text-gray-400 mt-0.5 ml-1 line-clamp-2">
+                    {loc.countryCode && (
+                      <img
+                        src={`https://flagcdn.com/${loc.countryCode}.svg`}
+                        width={16}
+                        height={12}
+                        alt={loc.countryCode.toUpperCase()}
+                        className="shrink-0 rounded-[2px]"
+                      />
+                    )}
+                    {loc.address}
+                  </p>
                 )}
               </div>
-              <Button variant="ghost" size="icon" onClick={() => removeLocation(loc.id)}>
-                <X className="size-4" />
-              </Button>
             </motion.div>
           ))}
         </AnimatePresence>
 
-        <motion.button
-          onClick={addLocation}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors ml-1 cursor-pointer py-2"
-          whileTap={{ scale: 0.97 }}
-        >
-          <Plus className="size-4" />
-          Add location
-        </motion.button>
+        <AnimatePresence mode="wait">
+          {showAddInput ? (
+            <motion.div
+              key="add-input"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden pt-1"
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <AddLocationAutocomplete onPlaceSelected={addLocation} />
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowAddInput(false)}>
+                  <X className="size-4" />
+                </Button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="add-button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <Button variant="outline" size="sm" onClick={() => setShowAddInput(true)}>
+                <Plus className="size-4" />
+                Add location
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       <motion.div

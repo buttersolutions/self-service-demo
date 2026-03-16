@@ -25,7 +25,7 @@ async function placesRequest(path: string, fieldMask: string, body?: object) {
 // --- Text Search: find chain locations ---
 
 const FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location";
+  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location,places.addressComponents";
 
 async function textSearch(body: Record<string, unknown>): Promise<PlaceSummary[]> {
   const data = await placesRequest("/places:searchText", FIELD_MASK, body);
@@ -132,6 +132,12 @@ export function getPhotoUrl(photoName: string, maxWidthPx = 400): string {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function mapPlace(raw: any): PlaceSummary {
+  const components: any[] = raw.addressComponents ?? [];
+  const country = components.find((c: any) =>
+    (c.types ?? []).includes("country")
+  );
+  const countryCode = country?.shortText?.toLowerCase() as string | undefined;
+
   return {
     placeId: raw.id ?? raw.name?.split("/").pop() ?? "",
     displayName:
@@ -140,6 +146,7 @@ function mapPlace(raw: any): PlaceSummary {
         : raw.displayName?.text ?? "",
     formattedAddress: raw.formattedAddress ?? "",
     websiteUri: raw.websiteUri,
+    ...(countryCode && { countryCode }),
     location: {
       lat: raw.location?.latitude ?? 0,
       lng: raw.location?.longitude ?? 0,

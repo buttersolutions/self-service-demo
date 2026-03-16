@@ -6,6 +6,7 @@ export interface LocationItem {
   id: string;
   name: string;
   address: string;
+  countryCode?: string; // ISO 3166-1 alpha-2 lowercase (e.g. "us", "gb")
   lat: number;
   lng: number;
 }

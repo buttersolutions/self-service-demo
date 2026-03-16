@@ -141,10 +141,10 @@ export function Onboarding() {
         setGatheringData((prev) => {
           const existing = prev.reviews ?? [];
           // Merge: keep existing Google reviews, add new Outscraper ones (dedup by author+text)
-          const seen = new Set(existing.map((r) => `${r.author}:${r.text.slice(0, 50)}`));
+          const seen = new Set(existing.map((r) => `${r.author}:${(r.text ?? '').slice(0, 50)}`));
           const merged = [...existing];
           for (const review of outscraperReviews) {
-            const key = `${review.author}:${review.text.slice(0, 50)}`;
+            const key = `${review.author}:${(review.text ?? '').slice(0, 50)}`;
             if (!seen.has(key)) {
               seen.add(key);
               merged.push(review);
@@ -220,6 +220,7 @@ export function Onboarding() {
         id: p.placeId,
         name: p.displayName,
         address: p.formattedAddress,
+        countryCode: p.countryCode,
         lat: p.location.lat,
         lng: p.location.lng,
       }));
