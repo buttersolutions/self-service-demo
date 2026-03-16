@@ -25,22 +25,49 @@ async function placesRequest(path: string, fieldMask: string, body?: object) {
 // --- Text Search: find chain locations ---
 
 const FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location,places.addressComponents";
+  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location,places.addressComponents,places.userRatingCount";
 
-async function textSearch(body: Record<string, unknown>): Promise<PlaceSummary[]> {
+export async function textSearch(body: Record<string, unknown>): Promise<PlaceSummary[]> {
   const data = await placesRequest("/places:searchText", FIELD_MASK, body);
   return (data.places ?? []).map(mapPlace);
 }
 
-function brandFilter(websiteDomain: string) {
-  const brandName = websiteDomain.split(".")[0];
+export function brandFilter(websiteDomain: string, queryDisplayName: string) {
+  const brandName = websiteDomain.split(".")[0]; // e.g. "maharani-hamburg"
+  // Extract meaningful brand words (drop city/generic suffixes, short words)
+  const brandWords = brandName
+    .split(/[-_]/)
+    .filter((w) => w.length > 2)
+    .map((w) => w.toLowerCase());
+  const queryWords = queryDisplayName
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+
   return (p: PlaceSummary) => {
-    if (!p.websiteUri) return false;
-    try {
-      return new URL(p.websiteUri).hostname.replace("www.", "").includes(brandName);
-    } catch {
-      return false;
+    // Check 1: website domain contains the brand name (original logic)
+    if (p.websiteUri) {
+      try {
+        const hostname = new URL(p.websiteUri).hostname.replace("www.", "");
+        if (hostname.includes(brandName)) return true;
+        // Check 1b: shared domain root (e.g. maharani-hamburg / maharaja-hamburg
+        // share the city segment and have similar structure)
+        const hostParts = hostname.split(".")[0].split(/[-_]/).filter((w) => w.length > 2);
+        const sharedWords = hostParts.filter((w) => brandWords.includes(w));
+        if (sharedWords.length > 0 && hostParts.length > 0) return true;
+      } catch {
+        // ignore
+      }
     }
+
+    // Check 2: display name shares significant words with the query
+    // (catches sister brands like Maharani/Maharaja under same business)
+    const nameLower = p.displayName.toLowerCase();
+    const nameWords = nameLower.split(/\s+/).filter((w) => w.length > 2);
+    const sharedNameWords = queryWords.filter((w) => nameWords.includes(w));
+    if (sharedNameWords.length > 0) return true;
+
+    return false;
   };
 }
 
@@ -68,7 +95,7 @@ export async function searchPlaces(
   // Google's tendency to return few results for short global queries.
   // Extract country from the selected place's address if available,
   // but also run a global search. Dedupe by placeId.
-  const filter = brandFilter(websiteDomain);
+  const filter = brandFilter(websiteDomain, query);
 
   // Run the query both as-is and with just the brand name, across regions.
   // Google Text Search returns inconsistent results for short chain names,
@@ -100,7 +127,7 @@ export async function searchPlaces(
     }
   }
 
-  return deduped.filter(filter);
+  return deduped.filter(filter).filter((p) => (p.userRatingCount ?? 0) > 0);
 }
 
 // --- Place Details: reviews + photos ---
@@ -147,6 +174,7 @@ function mapPlace(raw: any): PlaceSummary {
     formattedAddress: raw.formattedAddress ?? "",
     websiteUri: raw.websiteUri,
     ...(countryCode && { countryCode }),
+    userRatingCount: raw.userRatingCount ?? 0,
     location: {
       lat: raw.location?.latitude ?? 0,
       lng: raw.location?.longitude ?? 0,

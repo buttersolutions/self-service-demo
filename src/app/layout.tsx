@@ -1,22 +1,17 @@
 import type { Metadata } from "next";
-import { Inter, Merriweather } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const dmSans = DM_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
-});
-
-const merriweather = Merriweather({
-  variable: "--font-merriweather",
-  subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "allgravy — Self-Service Onboarding",
-  description: "Get your business online in minutes",
+  title: "All Gravy · Staff Report",
+  description: "See what customers really think about your staff. Free AI-powered report in 60 seconds.",
 };
 
 export default function RootLayout({
@@ -26,12 +21,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${merriweather.variable} antialiased`}>
-        {children}
+      <body className={`${dmSans.variable} antialiased`}>
         <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`}
           strategy="afterInteractive"
         />
+        {children}
       </body>
     </html>
   );
