@@ -57,6 +57,34 @@ export async function fetchOutscraperReviews(
   return place as OutscraperPlace;
 }
 
+export async function fetchDiverseReviews(
+  placeId: string
+): Promise<OutscraperReview[]> {
+  const fetches = [
+    fetchOutscraperReviews(placeId, 50, "newest"),
+    fetchOutscraperReviews(placeId, 25, "lowest_rating"),
+    fetchOutscraperReviews(placeId, 25, "highest_rating"),
+  ];
+
+  const results = await Promise.allSettled(fetches);
+
+  const seen = new Set<string>();
+  const unique: OutscraperReview[] = [];
+
+  for (const result of results) {
+    if (result.status !== "fulfilled" || !result.value) continue;
+    for (const review of result.value.reviews_data ?? []) {
+      const key = `${review.autor_id}|${review.review_timestamp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(review);
+      }
+    }
+  }
+
+  return unique;
+}
+
 export async function fetchOutscraperReviewsBatch(
   placeIds: string[],
   reviewsLimit = 30,

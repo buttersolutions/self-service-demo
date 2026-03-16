@@ -95,28 +95,65 @@ async function pollJob<T>(
   throw new Error("Waterfall job timed out waiting for results");
 }
 
-// --- Synchronous contact search ---
+// --- Title filter buckets (boolean filter expressions, matches contact-discovery agent) ---
 
-interface ContactSearchResponse {
-  persons: WaterfallPerson[];
+const TITLE_FILTERS: { name: string; filter: string }[] = [
+  {
+    name: "leadership",
+    filter:
+      "((ceo) OR (cto) OR (chief executive) OR (owner) OR (founder) OR (co-founder) OR (managing director) OR (md) OR (algemeen directeur) OR (directeur generaal) OR (eigenaar) OR (administrerende direktør) OR (daglig leder) OR (adm. dir.) OR (verkställande direktör) OR (vd)) AND NOT ((assistant) OR (intern))",
+  },
+  {
+    name: "operations",
+    filter:
+      "((coo) OR (chief operating) OR (operations director) OR (director of operations) OR (head of operations) OR (vp operations) OR (vp of operations) OR (operations manager) OR (operationeel directeur) OR (directeur operaties) OR (operationeel manager) OR (hoofd operations) OR (bedrijfsleider) OR (driftsjef) OR (driftsleder) OR (driftschef)) AND NOT ((assistant) OR (intern) OR (coordinator))",
+  },
+  {
+    name: "people_culture",
+    filter:
+      "((hr) OR (human resources) OR (chro) OR (cpo) OR (people) OR (culture) OR (head of people) OR (people director) OR (director of people) OR (people manager) OR (chief people) OR (hr director) OR (hr manager) OR (head of hr) OR (people and culture) OR (people & culture) OR (culture director) OR (people ops) OR (people operations) OR (employer brand) OR (wellbeing) OR (internal communications) OR (internal comms) OR (employee communications) OR (employee engagement) OR (communications director) OR (communications manager) OR (personeelsmanager) OR (personeelsdirecteur) OR (hoofd p&o) OR (p&o manager) OR (p&o directeur) OR (hr-manager) OR (hr-sjef) OR (personalsjef) OR (hr-leder) OR (hr-chef) OR (personalechef) OR (personalchef) OR (hr-ansvarig)) AND NOT ((assistant) OR (intern) OR (coordinator) OR (administrator) OR (external) OR (marketing))",
+  },
+  {
+    name: "l_and_d",
+    filter:
+      "((learning) OR (learning and development) OR (learning & development) OR (l&d) OR (head of l&d) OR (l&d manager) OR (l&d director) OR (training manager) OR (training director) OR (head of training) OR (people development) OR (opleidingsmanager) OR (opleidingsdirecteur) OR (hoofd opleiding) OR (opplæringssjef) OR (opplæringsleder) OR (uddannelseschef) OR (utbildningschef) OR (utbildningsansvarig)) AND NOT ((assistant) OR (intern))",
+  },
+  {
+    name: "finance",
+    filter:
+      "((cfo) OR (chief financial) OR (finance director) OR (director of finance) OR (financial controller) OR (vp finance) OR (head of finance) OR (financieel directeur) OR (hoofd financiën) OR (financieel controller) OR (økonomisjef) OR (finansdirektør) OR (ekonomichef) OR (finansdirektör)) AND NOT ((assistant) OR (intern))",
+  },
+];
+
+const BUCKET_LABELS: Record<string, string> = {
+  leadership: "Leadership",
+  operations: "Operations",
+  people_culture: "People & Culture",
+  l_and_d: "L&D",
+  finance: "Finance",
+};
+
+// --- Contact search (synchronous, paginated) ---
+
+interface ContactSearchResult {
+  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "TIMED_OUT" | "ABORTED";
+  output?: { persons: WaterfallPerson[] };
 }
 
 async function searchContacts(
   domain: string,
-  titleFilters: string[],
-  linkedinUrl?: string
-): Promise<WaterfallPerson[]> {
-  const body: Record<string, unknown> = {
-    domain,
-    title_filters: titleFilters.map((t) => ({ title: t })),
-    page_size: 25,
-  };
-  if (linkedinUrl) body.linkedin_url = linkedinUrl;
-
+  pageNumber = 1,
+  pageSize = 25
+): Promise<{ persons: WaterfallPerson[]; hasMore: boolean }> {
   const res = await fetch(`${BASE}/search/contact`, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      domain,
+      title_filters: TITLE_FILTERS,
+      page_size: pageSize,
+      page_number: pageNumber,
+    }),
   });
 
   if (!res.ok) {
@@ -124,89 +161,27 @@ async function searchContacts(
     throw new Error(`Waterfall contact search error (${res.status}): ${text}`);
   }
 
-  const data: ContactSearchResponse = await res.json();
-  return data.persons ?? [];
+  const data: ContactSearchResult = await res.json();
+  if (data.status !== "SUCCEEDED") return { persons: [], hasMore: false };
+
+  const persons = data.output?.persons ?? [];
+  return { persons, hasMore: persons.length >= pageSize };
 }
 
-// --- Title filter groups with multi-language variants ---
+async function searchAllContacts(domain: string): Promise<WaterfallPerson[]> {
+  const allPersons: WaterfallPerson[] = [];
+  let page = 1;
+  const maxPages = 4;
 
-const SEARCH_GROUPS: { label: string; titles: string[] }[] = [
-  {
-    label: "Leadership",
-    titles: [
-      // English
-      "ceo", "cto", "founder", "co-founder", "managing director",
-      // Dutch
-      "directeur", "oprichter", "mede-oprichter", "algemeen directeur",
-      // Norwegian
-      "daglig leder", "grunnlegger", "medgrunnlegger", "administrerende direktør",
-      // Danish
-      "direktør", "stifter", "medstifter", "administrerende direktør",
-      // Swedish
-      "vd", "grundare", "medgrundare", "verkställande direktör",
-    ],
-  },
-  {
-    label: "Operations",
-    titles: [
-      // English
-      "coo", "operations director", "vp operations", "head of operations",
-      // Dutch
-      "operationeel directeur", "hoofd operaties",
-      // Norwegian
-      "driftsdirektør", "driftssjef", "leder for drift",
-      // Danish
-      "driftsdirektør", "driftschef",
-      // Swedish
-      "driftschef", "operativ chef", "driftsdirektör",
-    ],
-  },
-  {
-    label: "People & Culture",
-    titles: [
-      // English
-      "hr", "human resources", "people", "culture", "wellbeing", "head of people", "hr director", "people director",
-      // Dutch
-      "hr-directeur", "hoofd hr", "hoofd personeel", "welzijn",
-      // Norwegian
-      "hr-sjef", "personalsjef", "hr-direktør", "leder for mennesker og kultur",
-      // Danish
-      "hr-chef", "personalechef", "hr-direktør", "trivsel",
-      // Swedish
-      "hr-chef", "personalchef", "hr-direktör", "välbefinnande",
-    ],
-  },
-  {
-    label: "L&D",
-    titles: [
-      // English
-      "learning and development", "learning & development", "l&d", "training", "training manager", "head of learning",
-      // Dutch
-      "opleidingsmanager", "hoofd leren en ontwikkeling", "trainingsmanager",
-      // Norwegian
-      "opplæringssjef", "leder for læring og utvikling",
-      // Danish
-      "uddannelseschef", "leder for læring og udvikling",
-      // Swedish
-      "utbildningschef", "chef för lärande och utveckling",
-    ],
-  },
-  {
-    label: "Finance",
-    titles: [
-      // English
-      "cfo", "finance director", "controller", "head of finance", "finance manager",
-      // Dutch
-      "financieel directeur", "hoofd financiën", "controller",
-      // Norwegian
-      "finansdirektør", "økonomisjef", "økonomidirektør",
-      // Danish
-      "finansdirektør", "økonomichef", "økonomidirektør",
-      // Swedish
-      "finanschef", "ekonomichef", "ekonomidirektör",
-    ],
-  },
-];
+  while (page <= maxPages) {
+    const { persons, hasMore } = await searchContacts(domain, page);
+    allPersons.push(...persons);
+    if (!hasMore) break;
+    page++;
+  }
+
+  return allPersons;
+}
 
 // --- Public API ---
 
@@ -237,52 +212,51 @@ export interface WaterfallSearchResult {
 export async function findEmployees(
   domain: string
 ): Promise<WaterfallSearchResult> {
-  // Step 1: Enrich company first to get LinkedIn URL slug
-  const companyResult = await enrichCompany(domain).catch(() => null);
-  const companyLinkedinUrl = companyResult?.linkedin_url ?? undefined;
+  // Run company enrichment + paginated contact search in parallel
+  const [companyResult, contactResult] = await Promise.allSettled([
+    enrichCompany(domain),
+    searchAllContacts(domain),
+  ]);
 
-  // Step 2: Fire 5 parallel contact searches with domain + linkedin_url
-  const contactResults = await Promise.allSettled(
-    SEARCH_GROUPS.map(async (group) => {
-      const persons = await searchContacts(domain, group.titles, companyLinkedinUrl);
-      return { label: group.label, persons };
-    })
-  );
+  const company =
+    companyResult.status === "fulfilled" ? companyResult.value : null;
 
-  // Dedupe persons by linkedin_url, keep only those with LinkedIn profiles
+  const allContacts =
+    contactResult.status === "fulfilled" ? contactResult.value : [];
+  const searchError =
+    contactResult.status === "rejected"
+      ? contactResult.reason?.message ?? "Search failed"
+      : undefined;
+
+  // Dedupe by LinkedIn URL, count per bucket using seniority/department from Waterfall
   const seen = new Set<string>();
-  const allPersons: WaterfallPerson[] = [];
-  const searchGroups: WaterfallSearchResult["searchGroups"] = [];
+  const persons: WaterfallPerson[] = [];
+  const bucketCounts = new Map<string, number>();
+  for (const f of TITLE_FILTERS) bucketCounts.set(f.name, 0);
 
-  for (let i = 0; i < contactResults.length; i++) {
-    const r = contactResults[i];
-    if (r.status === "fulfilled") {
-      searchGroups.push({
-        label: r.value.label,
-        personCount: r.value.persons.length,
-        status: "ok",
-      });
+  for (const person of allContacts) {
+    if (!person.linkedin_url) continue;
+    if (seen.has(person.linkedin_url)) continue;
+    seen.add(person.linkedin_url);
+    persons.push(person);
 
-      for (const person of r.value.persons) {
-        if (!person.linkedin_url) continue;
-        if (!seen.has(person.linkedin_url)) {
-          seen.add(person.linkedin_url);
-          allPersons.push(person);
-        }
+    // Map Waterfall's department field back to our bucket labels
+    const dept = (person.department ?? "").toLowerCase();
+    for (const f of TITLE_FILTERS) {
+      const label = BUCKET_LABELS[f.name]?.toLowerCase();
+      if (label && dept.includes(label.split(" ")[0])) {
+        bucketCounts.set(f.name, (bucketCounts.get(f.name) ?? 0) + 1);
+        break;
       }
-    } else {
-      searchGroups.push({
-        label: SEARCH_GROUPS[i].label,
-        personCount: 0,
-        status: "error",
-        error: r.reason?.message ?? "Search failed",
-      });
     }
   }
 
-  return {
-    company: companyResult,
-    persons: allPersons,
-    searchGroups,
-  };
+  const searchGroups = TITLE_FILTERS.map((f) => ({
+    label: BUCKET_LABELS[f.name] ?? f.name,
+    personCount: bucketCounts.get(f.name) ?? 0,
+    status: (searchError ? "error" : "ok") as "ok" | "error",
+    error: searchError,
+  }));
+
+  return { company, persons, searchGroups };
 }

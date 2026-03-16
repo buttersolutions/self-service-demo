@@ -2,14 +2,19 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import type { PlaceSummary } from "@/lib/types";
 
 interface LocationAutocompleteProps {
   onPlaceSelected: (place: PlaceSummary) => void;
+  placeholder?: string;
+  className?: string;
 }
 
 export function LocationAutocomplete({
   onPlaceSelected,
+  placeholder = "Search for your business...",
+  className,
 }: LocationAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -55,7 +60,6 @@ export function LocationAutocomplete({
       ac.addListener("place_changed", handlePlaceChanged);
       autocompleteRef.current = ac;
 
-      // Bias autocomplete to user's location via browser geolocation
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
@@ -66,9 +70,7 @@ export function LocationAutocomplete({
             });
             ac.setBounds(bias.getBounds()!);
           },
-          () => {
-            // Geolocation denied — fall back to IP-based bias (Google default)
-          }
+          () => {}
         );
       }
 
@@ -77,7 +79,6 @@ export function LocationAutocomplete({
 
     if (init()) return;
 
-    // Poll until Google Maps SDK is loaded
     const interval = setInterval(() => {
       if (init()) clearInterval(interval);
     }, 200);
@@ -89,8 +90,8 @@ export function LocationAutocomplete({
     <Input
       ref={inputRef}
       type="text"
-      placeholder="Search for your business..."
-      className="w-full"
+      placeholder={placeholder}
+      className={cn("w-full", className)}
     />
   );
 }
