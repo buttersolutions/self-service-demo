@@ -8,12 +8,23 @@ import type { PlaceSummary } from "@/lib/types";
 interface LocationAutocompleteProps {
   onPlaceSelected: (place: PlaceSummary) => void;
   placeholder?: string;
+  autocompleteTypes?: string[];
   className?: string;
+}
+
+function extractCountryCode(
+  place: google.maps.places.PlaceResult
+): string | undefined {
+  const country = place.address_components?.find((c) =>
+    c.types.includes("country")
+  );
+  return country?.short_name?.toLowerCase();
 }
 
 export function LocationAutocomplete({
   onPlaceSelected,
   placeholder = "Search for your business...",
+  autocompleteTypes = ["establishment"],
   className,
 }: LocationAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,11 +43,16 @@ export function LocationAutocomplete({
       formattedAddress: place.formatted_address ?? "",
       websiteUri: place.website,
       types: place.types,
+      countryCode: extractCountryCode(place),
       location: {
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
       },
     });
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
   }, [onPlaceSelected]);
 
   useEffect(() => {
@@ -46,7 +62,7 @@ export function LocationAutocomplete({
       if (!window.google?.maps?.places || !inputRef.current) return false;
 
       const ac = new google.maps.places.Autocomplete(inputRef.current, {
-        types: ["establishment"],
+        types: autocompleteTypes,
         fields: [
           "place_id",
           "name",
@@ -54,6 +70,7 @@ export function LocationAutocomplete({
           "website",
           "geometry.location",
           "types",
+          "address_components",
         ],
       });
 
@@ -84,7 +101,7 @@ export function LocationAutocomplete({
     }, 200);
 
     return () => clearInterval(interval);
-  }, [handlePlaceChanged]);
+  }, [handlePlaceChanged, autocompleteTypes]);
 
   return (
     <Input
