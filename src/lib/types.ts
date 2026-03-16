@@ -6,6 +6,7 @@ export interface PlaceSummary {
   formattedAddress: string;
   websiteUri?: string;
   types?: string[];
+  userRatingCount?: number;
   location: {
     lat: number;
     lng: number;
@@ -31,6 +32,37 @@ export interface PlaceDetails extends PlaceSummary {
   photos: PlacePhoto[];
   rating?: number;
   userRatingCount?: number;
+}
+
+// --- Staff analysis types ---
+
+export interface StaffMention {
+  reviewAuthor: string;
+  reviewText: string;
+  reviewRating: number;
+  reviewDate: string;
+  sentiment: "positive" | "negative";
+  staffNames: string[];
+  relevantExcerpt: string;
+  locationName: string;
+}
+
+export interface StaffAnalysis {
+  headline: string;
+  body: string;
+  standoutEmployee: string | null;
+  mentions: StaffMention[];
+  totalReviewsAnalyzed: number;
+  positiveCount: number;
+  negativeCount: number;
+  namedEmployees: string[];
+}
+
+export interface ScanResult {
+  place: PlaceSummary;
+  locations: PlaceSummary[];
+  locationDetails: PlaceDetails[];
+  staffAnalysis: StaffAnalysis | null;
 }
 
 // --- API request/response types ---
