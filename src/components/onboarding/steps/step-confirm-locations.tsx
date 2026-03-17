@@ -3,9 +3,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Loader2 } from 'lucide-react';
-import { OnboardingInput, OnboardingButton } from '../ui';
+import { OnboardingButton, OnboardingInput } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 import type { LocationItem } from '../types';
 
@@ -14,14 +16,9 @@ const BUTTON_LOADING_MS = 3000;
 interface StepConfirmLocationsProps {
   direction: number;
   locations: LocationItem[];
+  onEarlyStart?: (locations: LocationItem[]) => void;
   onConfirm: (locations: LocationItem[]) => void;
 }
-
-const itemVariants = {
-  initial: { opacity: 0, x: -12 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: 12, height: 0, marginBottom: 0 },
-};
 
 let nextId = 100;
 
@@ -33,6 +30,51 @@ function extractCountryCode(
   );
   return country?.short_name?.toLowerCase();
 }
+
+// ── Location badge with tooltip ──────────────────────────────────────
+
+function LocationBadge({
+  location,
+  onRemove,
+}: {
+  location: LocationItem;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div>
+          <Badge variant="outline" className="h-auto bg-white gap-1.5 py-1.5 px-3 text-sm cursor-default">
+            {location.countryCode && (
+              <img
+                src={`https://flagcdn.com/${location.countryCode}.svg`}
+                width={16}
+                height={12}
+                alt={location.countryCode.toUpperCase()}
+                className="shrink-0 rounded-[2px]"
+              />
+            )}
+            <span className="truncate max-w-[300px]">{location.name}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(location.id);
+              }}
+              className="ml-0.5 rounded-md cursor-pointer p-0.5 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <X className="size-3" />
+            </button>
+          </Badge>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="font-sans">
+        {location.address}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ── Add location autocomplete ────────────────────────────────────────
 
 function AddLocationAutocomplete({
   onPlaceSelected,
@@ -118,9 +160,12 @@ function AddLocationAutocomplete({
   );
 }
 
+// ── Main component ───────────────────────────────────────────────────
+
 export function StepConfirmLocations({
   direction,
   locations: initialLocations,
+  onEarlyStart,
   onConfirm,
 }: StepConfirmLocationsProps) {
   const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
@@ -129,14 +174,9 @@ export function StepConfirmLocations({
 
   const handleGetApp = useCallback(() => {
     setButtonLoading(true);
+    onEarlyStart?.(locations);
     setTimeout(() => onConfirm(locations), BUTTON_LOADING_MS);
-  }, [locations, onConfirm]);
-
-  const updateName = (id: string, newName: string) => {
-    setLocations((prev) =>
-      prev.map((loc) => (loc.id === id ? { ...loc, name: newName } : loc)),
-    );
-  };
+  }, [locations, onConfirm, onEarlyStart]);
 
   const removeLocation = (id: string) => {
     setLocations((prev) => prev.filter((loc) => loc.id !== id));
@@ -154,69 +194,33 @@ export function StepConfirmLocations({
 
   return (
     <motion.div
-      className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8 max-h-[calc(100dvh-96px)]"
+      className="w-full max-w-[640px] mx-auto px-8"
       custom={direction}
       variants={stepVariants}
       initial="initial"
       animate="animate"
       exit="exit"
     >
-      <motion.div className="w-full mb-6 shrink-0" variants={childVariants}>
+      <motion.div className="w-full mb-6" variants={childVariants}>
         <h1 className="text-[22px] font-bold text-gray-900 tracking-[-0.01em] font-serif">
           3. Confirm your locations
         </h1>
         <p className="text-[14px] text-gray-500 mt-2 leading-relaxed">
-          We found <span className="font-semibold text-gray-700">{initialLocations.length} locations</span> matching your business. They will be set up as workplaces in the app. Feel free to rename, remove, or add any that are missing.
+          We found <span className="font-semibold text-gray-700">{initialLocations.length} locations</span> matching your business. Remove any that don&apos;t belong, or add missing ones.
         </p>
       </motion.div>
 
-      <motion.div
-        className="w-full overflow-y-auto min-h-0 space-y-3 pr-1 pb-4"
-        variants={childVariants}
-      >
-        <AnimatePresence initial={false}>
-          {locations.map((loc, i) => (
-            <motion.div
-              key={loc.id}
-              variants={itemVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={{ duration: 0.25, delay: i * 0.05 }}
-              className="flex items-start gap-2"
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <OnboardingInput
-                      value={loc.name}
-                      onChange={(e) => updateName(loc.id, e.target.value)}
-                      placeholder="Location name"
-                    />
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => removeLocation(loc.id)}>
-                    <X className="size-4" />
-                  </Button>
-                </div>
-                {loc.address && (
-                  <p className="flex p-2 items-center gap-2 text-[11px] text-gray-400 mt-0.5 ml-1 line-clamp-2">
-                    {loc.countryCode && (
-                      <img
-                        src={`https://flagcdn.com/${loc.countryCode}.svg`}
-                        width={16}
-                        height={12}
-                        alt={loc.countryCode.toUpperCase()}
-                        className="shrink-0 rounded-[2px]"
-                      />
-                    )}
-                    {loc.address}
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      <motion.div className="w-full pb-4" variants={childVariants}>
+        {/* Badge grid */}
+        <TooltipProvider>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {locations.map((loc) => (
+              <LocationBadge key={loc.id} location={loc} onRemove={removeLocation} />
+            ))}
+          </div>
+        </TooltipProvider>
 
+        {/* Add location */}
         <AnimatePresence mode="wait">
           {showAddInput ? (
             <motion.div
@@ -225,7 +229,7 @@ export function StepConfirmLocations({
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2 }}
-              className="overflow-hidden pt-1"
+              className="overflow-hidden"
             >
               <div className="flex items-center gap-2">
                 <div className="flex-1">
@@ -244,19 +248,20 @@ export function StepConfirmLocations({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              <Button variant="outline" size="sm" onClick={() => setShowAddInput(true)}>
-                <Plus className="size-4" />
-                Add location
-              </Button>
+              <Badge
+                variant="outline"
+                className="h-auto bg-white gap-1.5 py-1.5 px-3 text-sm cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => setShowAddInput(true)}
+              >
+                <Plus className="size-3.5 text-muted-foreground" />
+                <span>Add location</span>
+              </Badge>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
-      <motion.div
-        className="w-full shrink-0 sticky bottom-0 z-10 bg-white rounded-2xl py-4 mt-4"
-        variants={childVariants}
-      >
+      <motion.div className="w-full pt-4" variants={childVariants}>
         <OnboardingButton active={valid} disabled={!valid || buttonLoading} onClick={handleGetApp}>
           {buttonLoading ? (
             <span className="flex items-center justify-center gap-2">

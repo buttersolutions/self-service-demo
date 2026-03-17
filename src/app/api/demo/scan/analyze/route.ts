@@ -160,16 +160,26 @@ async function runMerge(mentions: StaffMention[]): Promise<{
 }
 
 // The 3 Outscraper calls we fire per location, independently
-const REVIEW_FETCHES: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
+const REVIEW_FETCHES_FULL: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
   { limit: 50, sort: "newest" },
   { limit: 25, sort: "lowest_rating" },
   { limit: 25, sort: "highest_rating" },
 ];
 
+const REVIEW_FETCHES_LITE: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
+  { limit: 20, sort: "newest" },
+];
+
 export async function POST(request: Request) {
-  const { locations } = (await request.json()) as {
+  const url = new URL(request.url);
+  const lite = url.searchParams.get("lite") === "1";
+
+  const { locations: rawLocations } = (await request.json()) as {
     locations: PlaceSummary[];
   };
+
+  // In lite mode, cap locations to 3
+  const locations = lite ? rawLocations.slice(0, 3) : rawLocations;
 
   if (!locations?.length) {
     return Response.json({ error: "locations required" }, { status: 400 });
@@ -186,20 +196,26 @@ export async function POST(request: Request) {
       const ts = () => Date.now() - t0; // ms since pipeline start
 
       try {
-        // Start place details fetch immediately in parallel
-        const detailsStart = ts();
-        const detailsPromise = Promise.all(
-          locations.map((loc) => getPlaceDetails(loc.placeId).catch(() => null))
-        ).then((results) => {
-          emit("timing", {
-            id: "place_details",
-            label: "Place Details (Google)",
-            startMs: detailsStart,
-            endMs: ts(),
-            detail: `${results.filter(Boolean).length} locations`,
+        const reviewFetches = lite ? REVIEW_FETCHES_LITE : REVIEW_FETCHES_FULL;
+        const batchSize = lite ? 20 : 5;
+
+        // Start place details fetch immediately in parallel (skip in lite mode)
+        let detailsPromise: Promise<(Awaited<ReturnType<typeof getPlaceDetails>> | null)[]> | null = null;
+        if (!lite) {
+          const detailsStart = ts();
+          detailsPromise = Promise.all(
+            locations.map((loc) => getPlaceDetails(loc.placeId).catch(() => null))
+          ).then((results) => {
+            emit("timing", {
+              id: "place_details",
+              label: "Place Details (Google)",
+              startMs: detailsStart,
+              endMs: ts(),
+              detail: `${results.filter(Boolean).length} locations`,
+            });
+            return results;
           });
-          return results;
-        });
+        }
 
         const allMentions: StaffMention[] = [];
         const allNamedEmployees: string[] = [];
@@ -217,7 +233,7 @@ export async function POST(request: Request) {
 
           const analyzeWave = async (reviews: ReviewForAnalysis[], sort: string) => {
             if (!reviews.length) return;
-            const batches = chunkArray(reviews, 5);
+            const batches = chunkArray(reviews, batchSize);
             await Promise.all(
               batches.map(async (batch) => {
                 const idx = locationBatchIndex++;
@@ -248,8 +264,8 @@ export async function POST(request: Request) {
                     namedEmployees: result.namedEmployees,
                   });
 
-                  // Fire preliminary merge as soon as we have first mentions
-                  if (!preliminaryMergeFired && allMentions.length > 0) {
+                  // Fire preliminary merge as soon as we have first mentions (skip in lite)
+                  if (!lite && !preliminaryMergeFired && allMentions.length > 0) {
                     preliminaryMergeFired = true;
                     const snapshot = [...allMentions];
                     const prelimStart = ts();
@@ -277,9 +293,9 @@ export async function POST(request: Request) {
             );
           };
 
-          // Fire all 3 Outscraper calls concurrently, process each as it lands
+          // Fire Outscraper calls concurrently, process each as it lands
           await Promise.all(
-            REVIEW_FETCHES.map(async ({ limit, sort }) => {
+            reviewFetches.map(async ({ limit, sort }) => {
               const fetchStart = ts();
               try {
                 const place = await fetchOutscraperReviews(loc.placeId, limit, sort);
@@ -347,9 +363,13 @@ export async function POST(request: Request) {
           });
         };
 
-        // Run locations in batches of 5
-        for (let i = 0; i < locations.length; i += 5) {
-          await Promise.all(locations.slice(i, i + 5).map(processLocation));
+        // In lite mode run all locations concurrently, otherwise batch by 5
+        if (lite) {
+          await Promise.all(locations.map(processLocation));
+        } else {
+          for (let i = 0; i < locations.length; i += 5) {
+            await Promise.all(locations.slice(i, i + 5).map(processLocation));
+          }
         }
 
         emit("reviews_complete", { totalReviews });
@@ -386,9 +406,12 @@ export async function POST(request: Request) {
           emit("analysis", staffAnalysis);
         }
 
-        // Await place details (started in parallel at the top)
-        const detailsResults = await detailsPromise;
-        const locationDetails = detailsResults.filter(Boolean);
+        // Await place details (skip in lite mode)
+        let locationDetails: (Awaited<ReturnType<typeof getPlaceDetails>> | null)[] = [];
+        if (detailsPromise) {
+          const detailsResults = await detailsPromise;
+          locationDetails = detailsResults.filter(Boolean);
+        }
 
         emit("details", locationDetails);
 

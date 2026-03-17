@@ -8,13 +8,14 @@ import { TypewriterSearch } from '../ui/typewriter-search';
 import { GatheringSidebar, type SidebarStep } from '../animations/gathering-sidebar';
 import { GatheringMap } from '../animations/gathering-map';
 import { GatheringReviews } from '../animations/gathering-reviews';
+import { GatheringStaffAnalysis } from '../animations/gathering-staff-analysis';
 import { GatheringPhotos } from '../animations/gathering-photos';
 import { GatheringReport } from '../animations/gathering-report';
 import { GatheringBrandedApp } from '../animations/gathering-branded-app';
 import type { LocationItem, GatheringData } from '../types';
 import type { BusinessData } from './step-confirm-business';
 
-type PhaseId = 'locations' | 'reviews' | 'photos' | 'report' | 'branded-app';
+type PhaseId = 'locations' | 'reviews' | 'staff-analysis' | 'photos' | 'report' | 'branded-app';
 
 interface PhaseConfig {
   id: PhaseId;
@@ -33,18 +34,25 @@ const PHASES: PhaseConfig[] = [
     dataReady: () => true,
   },
   {
+    id: 'photos',
+    searchText: (name) => `Analysing ${name} images...`,
+    minDurationMs: Infinity,
+    maxDurationMs: Infinity,
+    dataReady: () => false, // Controlled by GatheringPhotos onComplete (3s after last photo)
+  },
+  {
     id: 'reviews',
-    searchText: (name) => `Reading ${name} customer reviews...`,
+    searchText: (name) => `Collecting ${name} reviews...`,
     minDurationMs: 12000,
     maxDurationMs: 25000,
     dataReady: (data) => data.reviews !== null,
   },
   {
-    id: 'photos',
-    searchText: (name) => `Collecting ${name} photos...`,
-    minDurationMs: 4000,
-    maxDurationMs: 6000,
-    dataReady: (data) => data.photos.length > 0,
+    id: 'staff-analysis',
+    searchText: (name) => `Analysing ${name} reviews...`,
+    minDurationMs: Infinity,
+    maxDurationMs: Infinity,
+    dataReady: () => false, // Controlled by GatheringStaffAnalysis onComplete (all animations + 5s)
   },
   {
     id: 'report',
@@ -64,8 +72,9 @@ const PHASES: PhaseConfig[] = [
 
 const SIDEBAR_STEPS: SidebarStep[] = [
   { id: 'locations', label: 'Mapping locations', description: 'Plotting your locations on the map' },
-  { id: 'reviews', label: 'Analyzing reviews', description: 'Reading what customers say' },
-  { id: 'photos', label: 'Collecting photos', description: 'Gathering business imagery' },
+  { id: 'photos', label: 'Analysing images', description: 'Analysing business imagery' },
+  { id: 'reviews', label: 'Collecting reviews', description: 'Reading what customers say' },
+  { id: 'staff-analysis', label: 'Analysing reviews', description: 'Analysing customer feedback' },
   { id: 'report', label: 'Business intelligence', description: 'Company intel & insights' },
   { id: 'branded-app', label: 'Your branded app', description: 'Personalizing your experience' },
 ];
@@ -233,6 +242,20 @@ export function StepGathering({
     setPhotosAllShown(true);
   }, []);
 
+  // Auto-navigate from photos to next step after all shown + 3s delay
+  const handlePhotosComplete = useCallback(() => {
+    if (autoAdvance) {
+      advancePhase();
+    }
+  }, [autoAdvance, advancePhase]);
+
+  // Auto-navigate from staff-analysis after all animations + 5s
+  const handleStaffAnalysisComplete = useCallback(() => {
+    if (autoAdvance) {
+      advancePhase();
+    }
+  }, [autoAdvance, advancePhase]);
+
   // Auto-navigate from report to branded-app when data is fully loaded
   const handleReportComplete = useCallback(() => {
     if (autoAdvance) {
@@ -251,6 +274,16 @@ export function StepGathering({
             isActive
           />
         );
+      case 'staff-analysis':
+        return (
+          <GatheringStaffAnalysis
+            mentions={gatheringData.staffMentions}
+            analysis={gatheringData.staffAnalysis}
+            reviews={gatheringData.reviews}
+            isActive
+            onComplete={handleStaffAnalysisComplete}
+          />
+        );
       case 'photos':
         return (
           <GatheringPhotos
@@ -260,6 +293,7 @@ export function StepGathering({
             businessName={businessName}
             isActive
             onAllPhotosShown={handlePhotosAllShown}
+            onComplete={handlePhotosComplete}
           />
         );
       case 'report':
@@ -280,6 +314,7 @@ export function StepGathering({
             logoUrl={business.logoUrl}
             brandColors={business.brandColors}
             locations={locations}
+            photos={gatheringData.photos}
             isActive
           />
         );
@@ -307,7 +342,7 @@ export function StepGathering({
 
       {/* Full-bleed content area */}
       <div className="w-full h-full relative overflow-hidden">
-        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews' || currentPhase.id === 'photos') && (
+        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews' || currentPhase.id === 'staff-analysis' || currentPhase.id === 'photos') && (
           <div className="absolute top-4 z-30 w-full max-w-md px-6" style={{ left: 'calc(50% + 140px)', transform: 'translateX(-50%)' }}>
             <TypewriterSearch key={currentPhase.id} text={currentPhase.searchText(businessName)} />
           </div>
@@ -329,7 +364,7 @@ export function StepGathering({
           </motion.div>
         </AnimatePresence>
 
-        {/* Scan line — on map, reviews, and photos (photos: only after all shown, 2 sweeps) */}
+        {/* Scan line — on map and reviews (photos: only after all shown, 2 sweeps) */}
         {(currentPhase.id === 'locations' || currentPhase.id === 'reviews') && (
           <motion.div
             key={`scan-${currentPhase.id}`}

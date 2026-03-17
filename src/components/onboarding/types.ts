@@ -1,6 +1,6 @@
 import type { CompanyInsight } from '@/lib/saber';
 import type { WaterfallCompany, WaterfallPerson } from '@/lib/waterfall';
-import type { PlacePhoto } from '@/lib/types';
+import type { PlacePhoto, StaffMention, StaffAnalysis } from '@/lib/types';
 
 export interface LocationItem {
   id: string;
@@ -24,4 +24,6 @@ export interface GatheringData {
   company: WaterfallCompany | null;
   persons: WaterfallPerson[] | null;
   photos: PlacePhoto[];
+  staffMentions: StaffMention[];
+  staffAnalysis: StaffAnalysis | null;
 }

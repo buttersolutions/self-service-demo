@@ -71,13 +71,23 @@ function buildStats(
   return stats;
 }
 
-function TypewriterText({ text, delay = 0, speed = 25, onProgress }: { text: string; delay?: number; speed?: number; onProgress?: () => void }) {
+function TypewriterText({
+  text,
+  delay = 0,
+  speed = 20,
+  onDone,
+}: {
+  text: string;
+  delay?: number;
+  speed?: number;
+  onDone?: () => void;
+}) {
   const [displayed, setDisplayed] = useState('');
   const [started, setStarted] = useState(false);
 
   useEffect(() => {
-    const startTimer = setTimeout(() => setStarted(true), delay);
-    return () => clearTimeout(startTimer);
+    const t = setTimeout(() => setStarted(true), delay);
+    return () => clearTimeout(t);
   }, [delay]);
 
   useEffect(() => {
@@ -87,14 +97,13 @@ function TypewriterText({ text, delay = 0, speed = 25, onProgress }: { text: str
       i++;
       if (i <= text.length) {
         setDisplayed(text.slice(0, i));
-        if (i % 5 === 0) onProgress?.();
       } else {
         clearInterval(interval);
-        onProgress?.();
+        onDone?.();
       }
     }, speed);
     return () => clearInterval(interval);
-  }, [started, text, speed, onProgress]);
+  }, [started, text, speed, onDone]);
 
   if (!started) return null;
 
@@ -112,6 +121,33 @@ function TypewriterText({ text, delay = 0, speed = 25, onProgress }: { text: str
   );
 }
 
+function StatBlock({
+  label,
+  value,
+  long,
+  onDone,
+}: {
+  label: string;
+  value: string;
+  long?: boolean;
+  onDone: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-[#625CE4]/60 mb-1">
+        {label}
+      </div>
+      <div className="text-2xl font-light text-gray-800 leading-relaxed font-serif">
+        <TypewriterText text={value} delay={150} speed={long ? 12 : 20} onDone={onDone} />
+      </div>
+    </motion.div>
+  );
+}
+
 export function GatheringReport({
   insights,
   company,
@@ -120,56 +156,74 @@ export function GatheringReport({
   isActive,
   onComplete,
 }: GatheringReportProps) {
-  const [phase, setPhase] = useState<'loading' | 'stats' | 'done'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'stats'>('loading');
+  const [revealedIndex, setRevealedIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const statsEndRef = useRef<HTMLDivElement>(null);
+  const scrollingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
   const completedRef = useRef(false);
+
   const stats = buildStats(company, persons, insights);
   const isDataReady = insights !== null && company !== null;
-
-  const handleTypewriterProgress = useCallback(() => {
-    statsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
 
   // When all data arrives, transition from loading to stats
   useEffect(() => {
     if (!isActive || !isDataReady || phase !== 'loading') return;
-    // Small delay so the transition feels intentional
     const timer = setTimeout(() => setPhase('stats'), 800);
     return () => clearTimeout(timer);
   }, [isActive, isDataReady, phase]);
 
-  // After stats have been shown for a while, auto-navigate to next step
-  useEffect(() => {
-    if (phase !== 'stats' || completedRef.current) return;
+  // Advance to the next block
+  const advanceBlock = useCallback(() => {
+    setRevealedIndex((prev) => prev + 1);
+  }, []);
 
-    // Estimate how long the typewriter animations will take
-    const totalStatDelay = stats.length * 0.4 * 1000 + 2000;
-    const longestTypewriter = stats.reduce((max, s) => {
-      if (s.long) return max; // long stats use reveal, not typewriter
-      return Math.max(max, s.value.length * 25);
-    }, 0);
-    const waitMs = Math.max(totalStatDelay + longestTypewriter, 8000);
+  // Fire onComplete 3 seconds after all stats have been revealed
+  useEffect(() => {
+    if (stats.length === 0 || revealedIndex < stats.length) return;
+    if (completedRef.current) return;
 
     const timer = setTimeout(() => {
       if (!completedRef.current) {
         completedRef.current = true;
-        setPhase('done');
         onComplete?.();
       }
-    }, waitMs);
+    }, 3000);
 
     return () => clearTimeout(timer);
-  }, [phase, stats, onComplete]);
+  }, [revealedIndex, stats.length, onComplete]);
 
-  // Scroll when stats appear
+  // Start slow auto-scroll after a few blocks
+  const startAutoScroll = useCallback(() => {
+    if (scrollingRef.current) return;
+    scrollingRef.current = true;
+
+    const scroll = () => {
+      if (!scrollingRef.current || !scrollRef.current) return;
+      const s = scrollRef.current;
+      if (s.scrollTop + s.clientHeight < s.scrollHeight - 2) {
+        s.scrollTop += 1.2;
+      }
+      rafRef.current = requestAnimationFrame(scroll);
+    };
+
+    rafRef.current = requestAnimationFrame(scroll);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      scrollingRef.current = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (phase !== 'stats') return;
-    const timer = setTimeout(() => {
-      statsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [phase]);
+    if (revealedIndex >= 3) {
+      const timer = setTimeout(startAutoScroll, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, revealedIndex, startAutoScroll]);
 
   return (
     <div
@@ -195,7 +249,7 @@ export function GatheringReport({
         )}
       </AnimatePresence>
 
-      {/* Loading state — header with pulsing dot */}
+      {/* Loading state */}
       <AnimatePresence>
         {phase === 'loading' && (
           <motion.div
@@ -227,9 +281,9 @@ export function GatheringReport({
         )}
       </AnimatePresence>
 
-      {/* Stats — shown after data loads */}
+      {/* Sequential reveal of stats */}
       <AnimatePresence>
-        {(phase === 'stats' || phase === 'done') && stats.length > 0 && (
+        {phase === 'stats' && stats.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -238,38 +292,35 @@ export function GatheringReport({
             style={{ paddingBottom: '40vh' }}
           >
             <div className="space-y-8">
-              {stats.map((stat, i) => (
-                <motion.div
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + i * 0.4, duration: 0.5 }}
-                >
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-[#625CE4]/60 mb-1">
-                    {stat.label}
-                  </div>
-                  <div className="text-2xl font-light text-gray-800 leading-relaxed font-serif">
-                    {stat.long ? (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: (0.2 + i * 0.4) + 0.2, duration: 0.8 }}
-                        onAnimationComplete={handleTypewriterProgress}
-                      >
+              {stats.map((stat, i) => {
+                if (i > revealedIndex) return null;
+
+                const isActiveBlock = i === revealedIndex;
+
+                if (!isActiveBlock) {
+                  return (
+                    <div key={`done-${stat.label}`}>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-[#625CE4]/60 mb-1">
+                        {stat.label}
+                      </div>
+                      <div className="text-2xl font-light text-gray-800 leading-relaxed font-serif">
                         {stat.value}
-                      </motion.span>
-                    ) : (
-                      <TypewriterText
-                        text={stat.value}
-                        delay={(0.2 + i * 0.4) * 1000 + 200}
-                        onProgress={handleTypewriterProgress}
-                      />
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <StatBlock
+                    key={`active-${stat.label}`}
+                    label={stat.label}
+                    value={stat.value}
+                    long={stat.long}
+                    onDone={advanceBlock}
+                  />
+                );
+              })}
             </div>
-            <div ref={statsEndRef} />
           </motion.div>
         )}
       </AnimatePresence>

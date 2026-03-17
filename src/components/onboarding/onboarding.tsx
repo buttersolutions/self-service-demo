@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
 } from './steps';
 import type { BusinessData } from './steps';
 import type { LocationItem, GatheringData, ReviewItem } from './types';
-import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse } from '@/lib/types';
+import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, StaffMention, StaffAnalysis } from '@/lib/types';
 
 type Step = 'search' | 'confirm-business' | 'confirm-locations' | 'gathering' | 'done';
 
@@ -59,6 +59,7 @@ interface FetchTiming {
   durationMs: number | null;
   status: 'pending' | 'done' | 'error';
   errorMessage?: string;
+  sseEvents?: string[];
 }
 
 export function Onboarding() {
@@ -73,6 +74,8 @@ export function Onboarding() {
     company: null,
     persons: null,
     photos: [],
+    staffMentions: [],
+    staffAnalysis: null,
   });
   const [fetchTimings, setFetchTimings] = useState<Record<string, FetchTiming>>({});
   const directionRef = useRef(1);
@@ -93,6 +96,19 @@ export function Onboarding() {
       return {
         ...prev,
         [key]: { ...existing, finishedAt, durationMs: finishedAt - existing.startedAt, status, errorMessage },
+      };
+    });
+  }, []);
+
+  const trackSseEvent = useCallback((key: string, event: string) => {
+    setFetchTimings((prev) => {
+      const existing = prev[key];
+      if (!existing) return prev;
+      const elapsed = ((Date.now() - existing.startedAt) / 1000).toFixed(1);
+      const entry = `+${elapsed}s ${event}`;
+      return {
+        ...prev,
+        [key]: { ...existing, sseEvents: [...(existing.sseEvents ?? []), entry] },
       };
     });
   }, []);
@@ -312,6 +328,139 @@ export function Onboarding() {
     [business, locations, startBackgroundFetch],
   );
 
+  const startStaffAnalysisFetch = useCallback((confirmedLocs: LocationItem[]) => {
+    const places: PlaceSummary[] = confirmedLocs.map((loc) => ({
+      placeId: loc.id,
+      displayName: loc.name,
+      formattedAddress: loc.address,
+      location: { lat: loc.lat, lng: loc.lng },
+    }));
+
+    trackFetchStart('staffAnalysis', 'Staff Analysis (SSE)');
+
+    fetch('/api/demo/scan/analyze?lite=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locations: places }),
+    })
+      .then(async (res) => {
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        trackSseEvent('staffAnalysis', `connected (${res.status})`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = '';
+        let mentionCount = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE messages (separated by \n\n)
+          let boundary: number;
+          while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+            const message = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+
+            let eventName = '';
+            let eventData = '';
+
+            for (const line of message.split('\n')) {
+              if (line.startsWith('event: ')) {
+                eventName = line.slice(7).trim();
+              } else if (line.startsWith('data: ')) {
+                eventData = line.slice(6);
+              }
+            }
+
+            if (!eventName && currentEvent) eventName = currentEvent;
+            if (eventName) currentEvent = eventName;
+
+            if (eventName && eventData) {
+              try {
+                const data = JSON.parse(eventData);
+                if (eventName === 'batch_analysis') {
+                  const mentions = data.mentions as StaffMention[];
+                  mentionCount += mentions.length;
+                  trackSseEvent('staffAnalysis', `batch_analysis: +${mentions.length} mentions (total: ${mentionCount})`);
+                  setGatheringData((prev) => ({
+                    ...prev,
+                    staffMentions: [...prev.staffMentions, ...mentions],
+                  }));
+                } else if (eventName === 'analysis') {
+                  trackSseEvent('staffAnalysis', `analysis: final (${data.mentions?.length ?? 0} mentions)`);
+                  const analysis = data as StaffAnalysis;
+                  setGatheringData((prev) => ({
+                    ...prev,
+                    staffAnalysis: analysis,
+                    staffMentions: analysis.mentions,
+                  }));
+                } else if (eventName === 'error') {
+                  trackSseEvent('staffAnalysis', `ERROR: ${data.message ?? JSON.stringify(data)}`);
+                } else if (eventName === 'timing') {
+                  trackSseEvent('staffAnalysis', `timing: ${data.label} (${data.detail ?? ''})`);
+                } else if (eventName === 'reviews_progress') {
+                  trackSseEvent('staffAnalysis', `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})`);
+                } else if (eventName === 'done') {
+                  trackSseEvent('staffAnalysis', 'done');
+                } else {
+                  trackSseEvent('staffAnalysis', `${eventName}`);
+                }
+              } catch {
+                trackSseEvent('staffAnalysis', `parse-error: ${eventName}`);
+              }
+            }
+          }
+        }
+
+        trackSseEvent('staffAnalysis', 'stream closed');
+
+        // If no analysis event was received (e.g. no mentions found), set fallback
+        setGatheringData((prev) => {
+          if (prev.staffAnalysis !== null) return prev;
+          return {
+            ...prev,
+            staffAnalysis: {
+              headline: '',
+              body: '',
+              standoutEmployee: null,
+              mentions: prev.staffMentions,
+              totalReviewsAnalyzed: 0,
+              positiveCount: 0,
+              negativeCount: 0,
+              namedEmployees: [],
+            },
+          };
+        });
+
+        trackFetchEnd('staffAnalysis', 'done');
+      })
+      .catch((err: unknown) => {
+        // Set fallback empty analysis so the phase can complete
+        setGatheringData((prev) => ({
+          ...prev,
+          staffAnalysis: {
+            headline: '',
+            body: '',
+            standoutEmployee: null,
+            mentions: prev.staffMentions,
+            totalReviewsAnalyzed: 0,
+            positiveCount: 0,
+            negativeCount: 0,
+            namedEmployees: [],
+          },
+        }));
+        trackFetchEnd('staffAnalysis', 'error', err instanceof Error ? err.message : 'Unknown error');
+      });
+  }, [trackFetchStart, trackFetchEnd, trackSseEvent]);
+
+  const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
+    startStaffAnalysisFetch(confirmedLocs);
+  }, [startStaffAnalysisFetch]);
+
   const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
     setLocations(confirmedLocs);
     goForward('gathering');
@@ -336,7 +485,7 @@ export function Onboarding() {
   const isFullBleed = step === 'gathering' || step === 'done';
 
   return (
-    <div className={`relative flex flex-col items-center min-h-dvh bg-gray-50/40 font-sans overflow-hidden ${isFullBleed ? '' : 'justify-center py-12'}`}>
+    <div className={`relative flex flex-col items-center min-h-dvh bg-gray-50/40 font-sans ${isFullBleed ? 'overflow-hidden' : 'overflow-y-auto justify-center py-12'}`}>
       <AnimatePresence>
         {showBack && (
           <motion.div
@@ -393,6 +542,7 @@ export function Onboarding() {
             key="step-confirm-locations"
             direction={directionRef.current}
             locations={locations}
+            onEarlyStart={handleLocationsEarlyStart}
             onConfirm={handleLocationsConfirm}
           />
         )}
@@ -440,24 +590,63 @@ export function Onboarding() {
   );
 }
 
+function LiveElapsed({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, []);
+  return <>{((now - startedAt) / 1000).toFixed(1)}s</>;
+}
+
 function FetchTimingsDebug({ timings }: { timings: Record<string, FetchTiming> }) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const entries = Object.entries(timings);
   if (entries.length === 0) return null;
 
+  const toggle = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[260px] max-w-[380px]">
+    <div className="fixed bottom-4 right-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[280px] max-w-[420px] max-h-[60vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
       <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">API Timings</div>
       {entries.map(([key, t]) => (
         <div key={key}>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-gray-300">{t.label}</span>
+          <div
+            className="flex items-center justify-between gap-4 cursor-pointer hover:bg-white/5 -mx-1 px-1 rounded"
+            onClick={() => t.sseEvents?.length ? toggle(key) : undefined}
+          >
+            <span className="text-gray-300">
+              {t.label}
+              {t.sseEvents?.length ? (
+                <span className="text-gray-500 ml-1">({t.sseEvents.length} events)</span>
+              ) : null}
+            </span>
             <span className={t.status === 'done' ? 'text-green-400' : t.status === 'error' ? 'text-red-400' : 'text-yellow-400'}>
-              {t.durationMs !== null ? `${(t.durationMs / 1000).toFixed(1)}s` : '...'}
+              {t.status === 'pending' ? (
+                <LiveElapsed startedAt={t.startedAt} />
+              ) : (
+                `${(t.durationMs! / 1000).toFixed(1)}s`
+              )}
             </span>
           </div>
           {t.status === 'error' && t.errorMessage && (
             <div className="text-red-400/80 text-[10px] mt-0.5 break-words leading-tight">
               {t.errorMessage}
+            </div>
+          )}
+          {expandedKeys.has(key) && t.sseEvents && (
+            <div className="ml-2 mt-1 mb-1 space-y-0.5 border-l border-gray-600 pl-2">
+              {t.sseEvents.map((evt, i) => (
+                <div key={i} className="text-[10px] text-gray-400 break-words leading-tight">
+                  {evt}
+                </div>
+              ))}
             </div>
           )}
         </div>
