@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:reactbits.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:www.reactbits.dev)",
+      "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/Animations\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
+      "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/TextAnimations\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
+      "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/Backgrounds\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
+      "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/Components\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
+      "Bash(node -e \"console.log\\(Math.max\\(0, Infinity - 1000\\)\\); console.log\\(setTimeout\\(\\(\\) => console.log\\('fired'\\), Infinity\\)\\)\")"
+    ]
+  }
+}

@@ -6,6 +6,7 @@ export interface PlaceSummary {
   formattedAddress: string;
   websiteUri?: string;
   types?: string[];
+  countryCode?: string; // ISO 3166-1 alpha-2 lowercase (e.g. "us", "gb")
   userRatingCount?: number;
   location: {
     lat: number;
