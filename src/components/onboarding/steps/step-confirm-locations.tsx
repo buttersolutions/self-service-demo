@@ -42,30 +42,31 @@ function LocationBadge({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <div>
-          <Badge variant="outline" className="h-auto bg-white gap-1.5 py-1.5 px-3 text-sm cursor-default">
-            {location.countryCode && (
-              <img
-                src={`https://flagcdn.com/${location.countryCode}.svg`}
-                width={16}
-                height={12}
-                alt={location.countryCode.toUpperCase()}
-                className="shrink-0 rounded-[2px]"
-              />
-            )}
-            <span className="truncate max-w-[300px]">{location.name}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(location.id);
-              }}
-              className="ml-0.5 rounded-md cursor-pointer p-0.5 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <X className="size-3" />
-            </button>
-          </Badge>
-        </div>
+      <TooltipTrigger render={<div />}>
+        <Badge variant="outline" className="h-auto bg-white gap-1.5 py-1.5 px-3 text-sm cursor-default">
+          {location.countryCode && (
+            <img
+              src={`https://flagcdn.com/${location.countryCode}.svg`}
+              width={16}
+              height={12}
+              alt={location.countryCode.toUpperCase()}
+              className="shrink-0 rounded-[2px]"
+            />
+          )}
+          <span className="truncate max-w-[200px]">{location.name}</span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(location.id);
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onRemove(location.id); } }}
+            className="ml-0.5 rounded-md cursor-pointer p-0.5 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <X className="size-3" />
+          </span>
+        </Badge>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6} className="font-sans">
         {location.address}

@@ -167,7 +167,7 @@ const REVIEW_FETCHES_FULL: { limit: number; sort: "newest" | "lowest_rating" | "
 ];
 
 const REVIEW_FETCHES_LITE: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
-  { limit: 20, sort: "newest" },
+  { limit: 30, sort: "newest" },
 ];
 
 export async function POST(request: Request) {
@@ -178,8 +178,8 @@ export async function POST(request: Request) {
     locations: PlaceSummary[];
   };
 
-  // In lite mode, cap locations to 3
-  const locations = lite ? rawLocations.slice(0, 3) : rawLocations;
+  // In lite mode, cap to 1 location for speed
+  const locations = lite ? rawLocations.slice(0, 1) : rawLocations;
 
   if (!locations?.length) {
     return Response.json({ error: "locations required" }, { status: 400 });
@@ -298,7 +298,10 @@ export async function POST(request: Request) {
             reviewFetches.map(async ({ limit, sort }) => {
               const fetchStart = ts();
               try {
-                const place = await fetchOutscraperReviews(loc.placeId, limit, sort);
+                const place = await Promise.race([
+                  fetchOutscraperReviews(loc.placeId, limit, sort),
+                  new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Outscraper timeout (60s)')), 60000)),
+                ]);
 
                 const rawCount = place?.reviews_data?.length ?? 0;
 

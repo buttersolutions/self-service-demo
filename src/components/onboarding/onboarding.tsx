@@ -613,7 +613,7 @@ function FetchTimingsDebug({ timings }: { timings: Record<string, FetchTiming> }
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[280px] max-w-[420px] max-h-[60vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+    <div className="fixed bottom-4 left-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[280px] max-w-[420px] max-h-[60vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
       <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">API Timings</div>
       {entries.map(([key, t]) => (
         <div key={key}>

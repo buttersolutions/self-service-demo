@@ -6,7 +6,7 @@ import {
   Users, Puzzle, MessageCircle, Bell, Settings,
   Heart, Eye, CornerDownLeft, SmilePlus, MoreVertical, Plus, MapPin, CalendarPlus,
 } from 'lucide-react';
-import { deriveBrandPalette } from '@/lib/colors';
+import { deriveBrandPalette, relativeLuminance, isTooLight } from '@/lib/colors';
 import { OnboardingButton } from '../ui';
 import type { LocationItem } from '../types';
 import type { PlacePhoto } from '@/lib/types';
@@ -79,7 +79,7 @@ function FeedReplica({
         {/* Logo */}
         <div className="flex items-center w-[200px]">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-8 object-contain" />
+            <img src={logoUrl} alt="" className="h-8 object-contain rounded-lg" />
           ) : (
             <div className="h-8 w-24 rounded-md" style={{ backgroundColor: primaryColor }} />
           )}
@@ -331,38 +331,227 @@ function LaptopMockup({ children }: { children: React.ReactNode }) {
       <div
         className="relative overflow-hidden"
         style={{
-          width: 780,
-          height: 490,
-          background: '#e2e3e5',
+          width: 740,
+          height: 460,
+          background: '#1a1a1a',
           padding: 10,
-          borderRadius: '12px 12px 0 0',
+          borderRadius: '16px',
           boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
         }}
       >
-        <div className="absolute top-[3px] left-1/2 -translate-x-1/2 size-[4px] rounded-full bg-gray-400/60" />
-        <div className="w-full h-full rounded-sm overflow-hidden">
+        <div className="absolute top-[3px] left-1/2 -translate-x-1/2 size-[4px] rounded-full bg-gray-600" />
+        <div className="w-full h-full rounded-lg overflow-hidden">
           {children}
         </div>
       </div>
-      <div style={{ width: 820, height: 8, background: 'linear-gradient(180deg, #d1d5db 0%, #c4c8ce 100%)', borderRadius: '0 0 6px 6px' }} />
-      <div className="mx-auto" style={{ width: 160, height: 3, background: '#b8bcc3', borderRadius: '0 0 4px 4px' }} />
+      <div style={{ width: 780, height: 14, background: 'linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%)', borderRadius: '0 0 8px 8px' }} />
+      <div className="mx-auto" style={{ width: 160, height: 3, background: '#333', borderRadius: '0 0 4px 4px' }} />
     </div>
   );
 }
 
-function PhoneMockup() {
+// ── Mobile feed replica (390×844, scaled to fit phone) ──────────────
+
+const FEED_THUMBS = [
+  'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&h=200&fit=crop',
+  'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&h=200&fit=crop',
+  'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=200&h=200&fit=crop',
+  'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=200&h=200&fit=crop',
+];
+
+function MobileFeedReplica({
+  businessName,
+  logoUrl,
+  primaryColor,
+  headerColor,
+  photos,
+}: {
+  businessName: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  headerColor: string;
+  photos: PlacePhoto[];
+}) {
+  const storyPhoto1 = photos[2] ? `/api/places/photo?name=${encodeURIComponent(photos[2].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop';
+  const storyPhoto2 = photos[4] ? `/api/places/photo?name=${encodeURIComponent(photos[4].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&h=400&fit=crop';
+  const storyPhoto3 = photos[5] ? `/api/places/photo?name=${encodeURIComponent(photos[5].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=400&fit=crop';
+  const postPhoto = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
+
+  return (
+    <div className="relative w-[390px] h-[844px] bg-white flex flex-col overflow-hidden" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* ── Status bar + Header (single block, no gap) ─────── */}
+      <div
+        className="shrink-0 px-5 pb-5"
+        style={{
+          backgroundColor: headerColor,
+          borderRadius: '0 0 24px 24px',
+        }}
+      >
+        {/* Status bar */}
+        <div className="flex items-center justify-between px-1 pt-3 pb-3">
+          <span className="text-[15px] font-semibold text-white">9:41</span>
+          <div className="flex items-center gap-1.5">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><rect x="0" y="9" width="3" height="3" rx="0.5" fill="white"/><rect x="4.5" y="6" width="3" height="6" rx="0.5" fill="white"/><rect x="9" y="3" width="3" height="9" rx="0.5" fill="white"/><rect x="13.5" y="0" width="3" height="12" rx="0.5" fill="white"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 11.5a1 1 0 100-2 1 1 0 000 2z" fill="white"/><path d="M4.93 7.76a4.5 4.5 0 016.14 0" stroke="white" strokeWidth="1.2" strokeLinecap="round"/><path d="M2.1 4.93a8 8 0 0111.8 0" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg>
+            <svg width="27" height="13" viewBox="0 0 27 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="2" stroke="white" strokeOpacity="0.5"/><rect x="2" y="2" width="18" height="9" rx="1" fill="white"/><path d="M24 4.5v4a1.5 1.5 0 000-4z" fill="white" fillOpacity="0.5"/></svg>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="h-11 object-contain" />
+          ) : (
+            <span className="text-[26px] font-black text-white">{businessName}</span>
+          )}
+          <div className="flex items-center">
+            <div className="size-10 flex items-center justify-center">
+              <svg width="22" height="22" viewBox="0 -4 28 28" fill="none"><path d="M19.75 13.1C19.37 14.71 18.54 16.19 17.37 17.36C16.19 18.54 14.72 19.36 13.1 19.75C11.49 20.14 9.8 20.07 8.22 19.56C6.64 19.05 5.24 18.11 4.16 16.85C3.08 15.58 2.37 14.05 2.11 12.41C1.85 10.77 2.05 9.09 2.68 7.56C3.32 6.02 4.37 4.7 5.71 3.72C7.05 2.74 8.64 2.16 10.29 2.03" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/><path d="M11 7.85L13.7 10.55L20 4.25" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+            </div>
+            <div className="size-10 flex items-center justify-center">
+              <CalendarDays className="size-[22px] text-white" strokeWidth={2} />
+            </div>
+            <div className="size-10 flex items-center justify-center">
+              <svg width="22" height="20" viewBox="0 0 26 23" fill="none"><path d="M7.85 9.63C11.32 6.41 13.24 6.34 16.89 9.63" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/><circle cx="12.37" cy="3.94" r="2.24" stroke="white" strokeWidth="2" fill="none"/><path d="M1.07 21.58C4.54 18.36 6.46 18.29 10.11 21.58" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/><circle cx="5.59" cy="15.89" r="2.24" stroke="white" strokeWidth="2" fill="none"/><path d="M15.03 21.58C18.5 18.36 20.42 18.29 24.07 21.58" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/><circle cx="19.55" cy="15.89" r="2.24" stroke="white" strokeWidth="2" fill="none"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Feed selector ─────────────────────────────────────── */}
+      <div className="shrink-0 px-3 pt-4 pb-2 flex gap-3.5 overflow-hidden items-start">
+        {/* For you — circle with red border (selected) */}
+        <div className="shrink-0 flex flex-col items-center gap-1">
+          <div className="relative">
+            <div className="size-[72px] rounded-full overflow-hidden border-[3px] border-[#FA614C] p-[2px]">
+              <img src={PEOPLE[0].avatar} alt="" className="w-full h-full rounded-full object-cover" />
+            </div>
+            <div className="absolute -top-1 -right-1 size-[20px] rounded-full bg-[#FA614C] flex items-center justify-center border-2 border-white">
+              <span className="text-[9px] font-bold text-white">2</span>
+            </div>
+          </div>
+          <span className="text-[11px] text-black text-center font-bold">For you</span>
+        </div>
+
+        {/* Feed circles */}
+        {[
+          { name: 'General', img: photos[6] ? `/api/places/photo?name=${encodeURIComponent(photos[6].name)}&maxWidthPx=200` : FEED_THUMBS[0], badge: 1 },
+          { name: 'Customer\nlove', img: photos[7] ? `/api/places/photo?name=${encodeURIComponent(photos[7].name)}&maxWidthPx=200` : FEED_THUMBS[1] },
+          { name: 'Product\nReleases', img: photos[8] ? `/api/places/photo?name=${encodeURIComponent(photos[8].name)}&maxWidthPx=200` : FEED_THUMBS[2] },
+        ].map((feed) => (
+          <div key={feed.name} className="shrink-0 flex flex-col items-center gap-1">
+            <div className="relative">
+              <div className="size-[72px] rounded-full overflow-hidden" style={{ border: '1px solid rgba(192,192,192,0.5)' }}>
+                <img src={feed.img} alt="" className="w-full h-full object-cover" />
+              </div>
+              {feed.badge && (
+                <div className="absolute -top-1 -right-1 size-[20px] rounded-full bg-[#FA614C] flex items-center justify-center border-2 border-white">
+                  <span className="text-[9px] font-bold text-white">{feed.badge}</span>
+                </div>
+              )}
+            </div>
+            <span className="text-[11px] mt-1 text-black text-center leading-tight max-w-[75px] whitespace-pre-line">{feed.name}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Broadcasts (horizontal scroll, 160×200 cards) ─────── */}
+      <div className="shrink-0 pl-3 pb-4 pt-1 flex gap-3 overflow-hidden">
+        <div className="w-[148px] h-[200px] rounded-xl overflow-hidden relative shrink-0">
+          <img src={storyPhoto1} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+          <p className="absolute bottom-4 left-4 text-white text-[15px] font-bold leading-tight">Summer Party</p>
+        </div>
+        <div className="w-[148px] h-[200px] rounded-xl overflow-hidden relative shrink-0">
+          <img src={storyPhoto2} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+          <p className="absolute bottom-4 left-4 text-white text-[15px] font-bold leading-tight">Cocktails 101</p>
+        </div>
+        <div className="w-[148px] h-[200px] rounded-xl overflow-hidden relative shrink-0">
+          <img src={storyPhoto3} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+          <p className="absolute bottom-4 left-4 text-white text-[15px] font-bold leading-tight">Team Lunch</p>
+        </div>
+      </div>
+
+      {/* ── Feed post (with photo) ────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100">
+        <div className="px-4 pt-4 pb-1">
+          <div className="flex items-start gap-3 mb-2">
+            <img src={PEOPLE[1].avatar} alt="" className="size-11 rounded-xl object-cover shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-bold text-[#1A2027]">{PEOPLE[1].name}</div>
+              <div className="text-[12px] text-[#7E7E7E]">09:03 in Announcements</div>
+            </div>
+            <MoreVertical className="size-5 text-[#C0C0C0] shrink-0 mt-1" />
+          </div>
+          <p className="text-[14px] text-[#1A2027] leading-relaxed mb-3">
+            Welcome to the {businessName} team! We&apos;re excited to have everyone on board 🎉🚀
+          </p>
+          {postPhoto && (
+            <div className="w-full h-44 rounded-xl overflow-hidden">
+              <img src={postPhoto} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── FAB (60×60) ───────────────────────────────────────── */}
+      <div
+        className="absolute right-6 bottom-[96px] size-[60px] rounded-full flex items-center justify-center shadow-md"
+        style={{ backgroundColor: headerColor }}
+      >
+        <Plus className="size-9 text-white" strokeWidth={2.5} />
+      </div>
+
+      {/* ── Bottom tab bar (83px, real SVG icons) ─────────────── */}
+      <div className="shrink-0 flex items-center justify-around bg-white px-2 pt-3 pb-0" style={{ height: 56, borderTop: '1px solid #e5e7eb' }}>
+        {[
+          { label: 'Feed', icon: '/icons/comms-active.svg', active: true },
+          { label: 'Chat', icon: '/icons/chat-inactive.svg', badge: 1 },
+          { label: 'Schedule', icon: '/icons/schedule-inactive.svg' },
+          { label: 'Hub', icon: '/icons/hub-inactive.svg' },
+          { label: 'You', icon: '/icons/settings-inactive.svg', badge: 6 },
+        ].map((tab) => (
+          <div key={tab.label} className="flex flex-col items-center gap-0.5 relative w-14">
+            <div className="relative">
+              <img src={tab.icon} alt="" className="size-6" />
+              {tab.badge && (
+                <div className="absolute -top-1 -right-2 size-[18px] rounded-full bg-[#FA614C] flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-white">{tab.badge}</span>
+                </div>
+              )}
+            </div>
+            <span className={`text-[10px] font-medium ${tab.active ? 'text-black' : 'text-[#7E7E7E]'}`}>
+              {tab.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Safe area bottom spacer */}
+      <div className="shrink-0 h-6 bg-white" />
+    </div>
+  );
+}
+
+function PhoneMockup({ children }: { children?: React.ReactNode }) {
   return (
     <div
       className="relative overflow-hidden"
       style={{
-        width: 200, height: 400, borderRadius: 32,
-        border: '5px solid #e2e3e5', backgroundColor: '#f0f1f3',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.10), 0 8px 20px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.6)',
+        width: 200, height: 432,
+        borderRadius: 28,
+        border: '4px solid #1a1a1a',
+        backgroundColor: '#ffffff',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.20), 0 8px 20px rgba(0,0,0,0.10)',
       }}
     >
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 rounded-b-2xl" style={{ width: 90, height: 20, backgroundColor: '#e2e3e5' }} />
-      <div className="w-full h-full overflow-hidden" style={{ background: 'linear-gradient(180deg, #fafafa 0%, #f0f0f2 100%)' }} />
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full z-10" style={{ width: 80, height: 4, backgroundColor: '#d4d5d8' }} />
+      <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-20 rounded-full" style={{ width: 50, height: 14, backgroundColor: '#1a1a1a' }} />
+      <div className="w-full h-full overflow-hidden rounded-[24px]">
+        {children ?? (
+          <div className="w-full h-full" style={{ background: 'linear-gradient(180deg, #fafafa 0%, #f0f0f2 100%)' }} />
+        )}
+      </div>
+      <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full z-20" style={{ width: 60, height: 4, backgroundColor: '#1a1a1a', opacity:0.2 }} />
     </div>
   );
 }
@@ -379,12 +568,19 @@ export function GatheringBrandedApp({
 }: GatheringBrandedAppProps) {
   const palette = deriveBrandPalette(brandColors);
   const primaryColor = palette.primary;
-  const SCALE = 760 / 1200;
+
+  // Pick the darkest usable brand color for the mobile header
+  const usableColors = brandColors.filter((c) => !isTooLight(c));
+  const darkestBrandColor = usableColors.length > 0
+    ? usableColors.reduce((darkest, c) => relativeLuminance(c) < relativeLuminance(darkest) ? c : darkest)
+    : primaryColor;
+
+  const SCALE = 720 / 1200;
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center px-6">
       <motion.div
-        className="text-center mb-8"
+        className="text-center mb-4"
         initial={{ opacity: 0, y: 16 }}
         animate={isActive ? { opacity: 1, y: 0 } : {}}
         transition={{ delay: 0.2, duration: 0.5 }}
@@ -397,7 +593,7 @@ export function GatheringBrandedApp({
         </p>
       </motion.div>
 
-      <div className="relative mb-10" style={{ width: 860, height: 560 }}>
+      <div className="relative mb-8" style={{ width: 860, height: 500 }}>
         <motion.div
           className="absolute bottom-0 left-0"
           initial={{ opacity: 0, y: 30, scale: 0.92 }}
@@ -418,7 +614,17 @@ export function GatheringBrandedApp({
           animate={isActive ? { opacity: 1, y: 0, scale: 1 } : {}}
           transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
-          <PhoneMockup />
+          <PhoneMockup>
+            <div style={{ width: 390, height: 844, transform: 'scale(0.493)', transformOrigin: 'top left' }}>
+              <MobileFeedReplica
+                businessName={businessName}
+                logoUrl={logoUrl}
+                primaryColor={primaryColor}
+                headerColor={darkestBrandColor}
+                photos={photos}
+              />
+            </div>
+          </PhoneMockup>
         </motion.div>
       </div>
 
