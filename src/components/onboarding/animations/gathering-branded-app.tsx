@@ -876,7 +876,7 @@ export function GatheringBrandedApp({
             <button
               className="h-12 px-20 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_2px_8px_rgba(98,92,228,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
             >
-              Get started
+              Get in
             </button>
           </motion.div>
         </div>
