@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useDemoFlow } from "@/lib/demo-flow-context";
+import { useOnboarding } from "@/lib/demo-flow-context";
 
 const steps = [
   { label: "Location", href: "/demo/location", step: 1 },
@@ -13,7 +13,7 @@ const steps = [
 
 export function Stepper() {
   const pathname = usePathname();
-  const { state } = useDemoFlow();
+  const { state } = useOnboarding();
 
   const currentStep =
     steps.find((s) => pathname.startsWith(s.href))?.step ?? 1;
@@ -21,7 +21,7 @@ export function Stepper() {
   function canNavigate(step: number) {
     if (step === 1) return true;
     if (step === 2) return !!state.selectedPlace;
-    if (step === 3) return state.confirmedLocations.length > 0;
+    if (step === 3) return state.locations.length > 0;
     return false;
   }
 

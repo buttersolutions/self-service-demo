@@ -568,7 +568,7 @@ function Report({ result }: { result: ScanResult }) {
       </div>
 
       <div className="py-8 text-center text-xs text-muted-foreground">
-        Powered by AllGravy · Staff insights generated from public reviews
+        Powered by All Gravy · Staff insights generated from public reviews
       </div>
     </div>
   );

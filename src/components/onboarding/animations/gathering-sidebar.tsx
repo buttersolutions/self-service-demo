@@ -161,10 +161,6 @@ export function GatheringSidebar({
           })}
         </div>
       </div>
-
-    
-        <EstimatedTimeCard />
-    
     </motion.div>
   );
 }

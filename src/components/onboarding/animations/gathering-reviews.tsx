@@ -10,7 +10,8 @@ interface GatheringReviewsProps {
   isActive: boolean;
 }
 
-const REVEAL_INTERVAL_MS = 800;
+const FIRST_REVEAL_DELAY_MS = 400;
+const REVEAL_INTERVAL_MS = 3500;
 const MAX_VISIBLE = 20;
 
 function StarRating({ rating }: { rating: number }) {
@@ -55,24 +56,14 @@ export function GatheringReviews({ reviews, isActive }: GatheringReviewsProps) {
     const max = Math.min(shuffledReviews.length, MAX_VISIBLE);
     if (visibleCount >= max) return;
 
-    intervalRef.current = setInterval(() => {
-      setVisibleCount((prev) => {
-        const next = prev + 1;
-        if (next >= max && intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        return next;
-      });
-    }, REVEAL_INTERVAL_MS);
+    // Show first review quickly, then slow cadence for the rest
+    const delay = visibleCount === 0 ? FIRST_REVEAL_DELAY_MS : REVEAL_INTERVAL_MS;
+    const timer = setTimeout(() => {
+      setVisibleCount((prev) => prev + 1);
+    }, delay);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [isActive, isLoading, shuffledReviews.length]);
+    return () => clearTimeout(timer);
+  }, [isActive, isLoading, shuffledReviews.length, visibleCount]);
 
   // Auto-scroll to bottom as new reviews appear
   useEffect(() => {

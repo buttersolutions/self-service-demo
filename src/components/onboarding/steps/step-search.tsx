@@ -107,7 +107,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
         className="text-[24px] font-bold text-gray-900 mb-6 tracking-[-0.01em] w-full text-center font-serif"
         variants={childVariants}
       >
-        1. Search for your business
+        Find your business
       </motion.h1>
 
       <motion.div

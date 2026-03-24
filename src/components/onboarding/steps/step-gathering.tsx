@@ -10,12 +10,11 @@ import { GatheringMap } from '../animations/gathering-map';
 import { GatheringReviews } from '../animations/gathering-reviews';
 import { GatheringStaffAnalysis } from '../animations/gathering-staff-analysis';
 import { GatheringPhotos } from '../animations/gathering-photos';
-import { GatheringReport } from '../animations/gathering-report';
 import { GatheringBrandedApp } from '../animations/gathering-branded-app';
-import type { LocationItem, GatheringData } from '../types';
-import type { BusinessData } from './step-confirm-business';
+import type { GatheringData } from '../types';
+import { useOnboarding } from '@/lib/demo-flow-context';
 
-type PhaseId = 'locations' | 'reviews' | 'staff-analysis' | 'photos' | 'report' | 'branded-app';
+type PhaseId = 'locations' | 'reviews' | 'staff-analysis' | 'photos' | 'branded-app';
 
 interface PhaseConfig {
   id: PhaseId;
@@ -43,8 +42,8 @@ const PHASES: PhaseConfig[] = [
   {
     id: 'reviews',
     searchText: (name) => `Collecting ${name} reviews...`,
-    minDurationMs: 12000,
-    maxDurationMs: 25000,
+    minDurationMs: 30000,
+    maxDurationMs: 50000,
     dataReady: (data) => data.reviews !== null,
   },
   {
@@ -53,13 +52,6 @@ const PHASES: PhaseConfig[] = [
     minDurationMs: Infinity,
     maxDurationMs: Infinity,
     dataReady: () => false, // Controlled by GatheringStaffAnalysis onComplete (all animations + 5s)
-  },
-  {
-    id: 'report',
-    searchText: () => '',
-    minDurationMs: Infinity,
-    maxDurationMs: Infinity,
-    dataReady: () => false, // Never auto-advance — controlled by GatheringReport's onComplete
   },
   {
     id: 'branded-app',
@@ -75,7 +67,6 @@ const SIDEBAR_STEPS: SidebarStep[] = [
   { id: 'photos', label: 'Analysing images', description: 'Analysing business imagery' },
   { id: 'reviews', label: 'Collecting reviews', description: 'Reading what customers say' },
   { id: 'staff-analysis', label: 'Analysing reviews', description: 'Analysing customer feedback' },
-  { id: 'report', label: 'Business intelligence', description: 'Company intel & insights' },
   { id: 'branded-app', label: 'Your branded app', description: 'Personalizing your experience' },
 ];
 
@@ -111,18 +102,14 @@ const phaseTransition = {
 };
 
 interface StepGatheringProps {
-  business: BusinessData;
-  locations: LocationItem[];
-  gatheringData: GatheringData;
   onComplete: () => void;
 }
 
 export function StepGathering({
-  business,
-  locations,
-  gatheringData,
   onComplete,
 }: StepGatheringProps) {
+  const { state } = useOnboarding();
+  const { business, locations, gatheringData } = state;
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [completedPhaseIds, setCompletedPhaseIds] = useState<Set<string>>(new Set());
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -132,7 +119,7 @@ export function StepGathering({
   const prevPhaseRef = useRef(0);
 
   const currentPhase = PHASES[currentPhaseIndex];
-  const businessName = business.name;
+  const businessName = business?.name ?? '';
 
   // Track direction for transitions
   const direction = currentPhaseIndex >= prevPhaseRef.current ? 1 : -1;
@@ -256,13 +243,6 @@ export function StepGathering({
     }
   }, [autoAdvance, advancePhase]);
 
-  // Auto-navigate from report to branded-app when data is fully loaded
-  const handleReportComplete = useCallback(() => {
-    if (autoAdvance) {
-      advancePhase();
-    }
-  }, [autoAdvance, advancePhase]);
-
   const renderAnimation = () => {
     switch (currentPhase.id) {
       case 'locations':
@@ -288,31 +268,18 @@ export function StepGathering({
         return (
           <GatheringPhotos
             photos={gatheringData.photos}
-            logoUrl={business.logoUrl}
-            brandColors={business.brandColors}
+            logoUrl={business?.logoUrl ?? null}
             businessName={businessName}
             isActive
             onAllPhotosShown={handlePhotosAllShown}
             onComplete={handlePhotosComplete}
           />
         );
-      case 'report':
-        return (
-          <GatheringReport
-            insights={gatheringData.insights}
-            company={gatheringData.company}
-            persons={gatheringData.persons}
-            businessName={businessName}
-            isActive
-            onComplete={handleReportComplete}
-          />
-        );
       case 'branded-app':
         return (
           <GatheringBrandedApp
             businessName={businessName}
-            logoUrl={business.logoUrl}
-            brandColors={business.brandColors}
+            logoUrl={business?.logoUrl ?? null}
             locations={locations}
             photos={gatheringData.photos}
             isActive
@@ -330,15 +297,19 @@ export function StepGathering({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
     >
-      {/* Sidebar — floating over content */}
-      <div className="absolute top-4 left-4 bottom-4 z-40 w-64">
+      {/* Sidebar — floating over content, animates away on branded-app */}
+      <motion.div
+        className="absolute top-4 left-4 bottom-4 z-40 w-64"
+        animate={currentPhase.id === 'branded-app' ? { x: -280, opacity: 0 } : { x: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
         <GatheringSidebar
           steps={SIDEBAR_STEPS}
           currentStepIndex={currentPhaseIndex}
           completedStepIds={completedPhaseIds}
           activeDescription={SIDEBAR_STEPS[currentPhaseIndex]?.description}
         />
-      </div>
+      </motion.div>
 
       {/* Full-bleed content area */}
       <div className="w-full h-full relative overflow-hidden">
@@ -352,7 +323,7 @@ export function StepGathering({
           <motion.div
             key={currentPhase.id}
             className="h-full"
-            style={currentPhase.id !== 'locations' ? { paddingLeft: 280 } : undefined}
+            style={currentPhase.id !== 'locations' && currentPhase.id !== 'branded-app' ? { paddingLeft: 280 } : undefined}
             custom={direction}
             variants={phaseVariants}
             initial="enter"
@@ -394,27 +365,29 @@ export function StepGathering({
           />
         )}
 
-        {/* Prev / Next navigation buttons */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
-          <button
-            onClick={goToPrev}
-            disabled={currentPhaseIndex === 0}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
-          >
-            <ChevronLeft className="size-3.5" />
-            Prev
-          </button>
-          <span className="text-[10px] font-mono text-gray-400 px-2">
-            {currentPhaseIndex + 1} / {PHASES.length}
-          </span>
-          <button
-            onClick={goToNext}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-white transition-all shadow-sm"
-          >
-            Next
-            <ChevronRight className="size-3.5" />
-          </button>
-        </div>
+        {/* Prev / Next navigation buttons (hidden on last step) */}
+        {currentPhase.id !== 'branded-app' && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
+            <button
+              onClick={goToPrev}
+              disabled={currentPhaseIndex === 0}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+            >
+              <ChevronLeft className="size-3.5" />
+              Prev
+            </button>
+            <span className="text-[10px] font-mono text-gray-400 px-2">
+              {currentPhaseIndex + 1} / {PHASES.length}
+            </span>
+            <button
+              onClick={goToNext}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-xs font-medium text-gray-600 hover:bg-white transition-all shadow-sm"
+            >
+              Next
+              <ChevronRight className="size-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );
