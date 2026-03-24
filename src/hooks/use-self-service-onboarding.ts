@@ -133,6 +133,7 @@ export function useSelfServiceOnboarding() {
           },
           branding: {
             logoURL: state.business?.logoUrl || undefined,
+            squareLogoURL: state.business?.logoUrl || undefined,
           },
         },
       };
