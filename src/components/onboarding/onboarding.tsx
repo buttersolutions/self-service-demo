@@ -12,11 +12,9 @@ import {
   StepGathering,
   StepDone,
 } from './steps';
-import type { BusinessData } from './steps';
-import type { LocationItem, GatheringData, ReviewItem } from './types';
+import type { FetchTiming, LocationItem, ReviewItem, Step } from './types';
 import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, StaffMention, StaffAnalysis } from '@/lib/types';
-
-type Step = 'search' | 'confirm-business' | 'confirm-locations' | 'gathering' | 'done';
+import { OnboardingProvider, useOnboarding } from '@/lib/demo-flow-context';
 
 const IGNORED_TYPES = new Set([
   'establishment',
@@ -52,79 +50,33 @@ const floatPineapple = {
   transition: { duration: 6, repeat: Infinity, ease: 'easeInOut' as const },
 };
 
-interface FetchTiming {
-  label: string;
-  startedAt: number;
-  finishedAt: number | null;
-  durationMs: number | null;
-  status: 'pending' | 'done' | 'error';
-  errorMessage?: string;
-  sseEvents?: string[];
+export function Onboarding() {
+  return (
+    <OnboardingProvider>
+      <OnboardingInner />
+    </OnboardingProvider>
+  );
 }
 
-export function Onboarding() {
-  const [step, setStep] = useState<Step>('search');
-  const [loading, setLoading] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<PlaceSummary | null>(null);
-  const [business, setBusiness] = useState<BusinessData | null>(null);
-  const [locations, setLocations] = useState<LocationItem[]>([]);
-  const [gatheringData, setGatheringData] = useState<GatheringData>({
-    reviews: null,
-    insights: null,
-    company: null,
-    persons: null,
-    photos: [],
-    staffMentions: [],
-    staffAnalysis: null,
-  });
-  const [fetchTimings, setFetchTimings] = useState<Record<string, FetchTiming>>({});
+function OnboardingInner() {
+  const { state, dispatch } = useOnboarding();
+  const { step, loading, selectedPlace, business, locations, gatheringData, fetchTimings } = state;
+
   const directionRef = useRef(1);
   const domainRef = useRef<string | undefined>(undefined);
 
-  const trackFetchStart = useCallback((key: string, label: string) => {
-    setFetchTimings((prev) => ({
-      ...prev,
-      [key]: { label, startedAt: Date.now(), finishedAt: null, durationMs: null, status: 'pending' },
-    }));
-  }, []);
-
-  const trackFetchEnd = useCallback((key: string, status: 'done' | 'error', errorMessage?: string) => {
-    setFetchTimings((prev) => {
-      const existing = prev[key];
-      if (!existing) return prev;
-      const finishedAt = Date.now();
-      return {
-        ...prev,
-        [key]: { ...existing, finishedAt, durationMs: finishedAt - existing.startedAt, status, errorMessage },
-      };
-    });
-  }, []);
-
-  const trackSseEvent = useCallback((key: string, event: string) => {
-    setFetchTimings((prev) => {
-      const existing = prev[key];
-      if (!existing) return prev;
-      const elapsed = ((Date.now() - existing.startedAt) / 1000).toFixed(1);
-      const entry = `+${elapsed}s ${event}`;
-      return {
-        ...prev,
-        [key]: { ...existing, sseEvents: [...(existing.sseEvents ?? []), entry] },
-      };
-    });
-  }, []);
-
   const goForward = (next: Step) => {
     directionRef.current = 1;
-    setStep(next);
+    dispatch({ type: 'SET_STEP', payload: next });
   };
 
   const goBack = (prev: Step) => {
     directionRef.current = -1;
-    setStep(prev);
+    dispatch({ type: 'SET_STEP', payload: prev });
   };
 
-  const startBackgroundFetch = useCallback((domain: string, placeIds: string[]) => {
-    trackFetchStart('insights', 'Saber Insights');
+  const startBackgroundFetch = useCallback((domain: string) => {
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'insights', label: 'Saber Insights' } });
     fetch('/api/company/insights', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,16 +85,36 @@ export function Onboarding() {
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
-        setGatheringData((prev) => ({ ...prev, insights: data.insights ?? [] }));
-        trackFetchEnd('insights', 'done');
+        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { insights: data.insights ?? [] } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'insights', status: 'done' } });
       })
       .catch((err: unknown) => {
-        setGatheringData((prev) => ({ ...prev, insights: [] }));
-        trackFetchEnd('insights', 'error', err instanceof Error ? err.message : 'Unknown error');
+        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { insights: [] } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'insights', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
       });
 
-    // Fetch Outscraper reviews — merge with any existing Google reviews
-    trackFetchStart('reviews', 'Outscraper Reviews');
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'enrich', label: 'Waterfall Enrich' } });
+    fetch('/api/company/enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { company: data.company ?? null, persons: data.persons ?? [] } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'enrich', status: 'done' } });
+      })
+      .catch((err: unknown) => {
+        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { company: null, persons: [] } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'enrich', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
+      });
+  }, [dispatch]);
+
+  const startReviewsFetch = useCallback((placeIds: string[]) => {
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Outscraper Reviews' } });
     fetch('/api/reviews', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -154,59 +126,22 @@ export function Onboarding() {
       })
       .then((data) => {
         const outscraperReviews: ReviewItem[] = data.reviews ?? [];
-        setGatheringData((prev) => {
-          const existing = prev.reviews ?? [];
-          // Merge: keep existing Google reviews, add new Outscraper ones (dedup by author+text)
-          const seen = new Set(existing.map((r) => `${r.author}:${(r.text ?? '').slice(0, 50)}`));
-          const merged = [...existing];
-          for (const review of outscraperReviews) {
-            const key = `${review.author}:${(review.text ?? '').slice(0, 50)}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              merged.push(review);
-            }
-          }
-          return { ...prev, reviews: merged };
-        });
-        trackFetchEnd('reviews', 'done');
+        dispatch({ type: 'MERGE_REVIEWS', payload: outscraperReviews });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'done' } });
       })
       .catch((err: unknown) => {
-        setGatheringData((prev) => ({ ...prev, reviews: prev.reviews ?? [] }));
-        trackFetchEnd('reviews', 'error', err instanceof Error ? err.message : 'Unknown error');
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
       });
-
-    trackFetchStart('enrich', 'Waterfall Enrich');
-    fetch('/api/company/enrich', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        setGatheringData((prev) => ({
-          ...prev,
-          company: data.company ?? null,
-          persons: data.persons ?? [],
-        }));
-        trackFetchEnd('enrich', 'done');
-      })
-      .catch((err: unknown) => {
-        setGatheringData((prev) => ({ ...prev, company: null, persons: [] }));
-        trackFetchEnd('enrich', 'error', err instanceof Error ? err.message : 'Unknown error');
-      });
-  }, [trackFetchStart, trackFetchEnd]);
+  }, [dispatch]);
 
   const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
-    setSelectedPlace(place);
-    setLoading(true);
+    dispatch({ type: 'SET_SELECTED_PLACE', payload: place });
+    dispatch({ type: 'SET_LOADING', payload: true });
 
     const domain = extractDomain(place.websiteUri);
 
-    trackFetchStart('places', 'Google Places Search');
-    trackFetchStart('brand', 'Logo.dev Brand');
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
 
     try {
       const [chainResult, brandResult] = await Promise.all([
@@ -219,7 +154,7 @@ export function Onboarding() {
           }),
         })
           .then((res) => res.json() as Promise<TextSearchResponse>)
-          .then((data) => { trackFetchEnd('places', 'done'); return data; }),
+          .then((data) => { dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } }); return data; }),
 
         domain
           ? fetch('/api/brand', {
@@ -228,14 +163,13 @@ export function Onboarding() {
               body: JSON.stringify({ domain }),
             })
               .then((res) => res.json())
-              .then((data) => { trackFetchEnd('brand', 'done'); return data; })
+              .then((data) => { dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } }); return data; })
           : Promise.resolve({ name: null, logoUrl: null, colors: ['#FFFFFF'] }),
       ]);
 
       const brandName = brandResult.name ?? place.displayName;
 
       const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
-        // Extract street name without number from the first segment of the address
         const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
         const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
         const locationLabel = streetName
@@ -252,17 +186,19 @@ export function Onboarding() {
         };
       });
 
-      setLocations(chainLocations);
+      dispatch({ type: 'SET_LOCATIONS', payload: chainLocations });
       domainRef.current = domain;
 
-      setBusiness({
-        name: brandName,
-        logoUrl: brandResult.logoUrl ?? null,
-        domain: domain ?? '',
-        brandColors: brandResult.colors ?? ['#FFFFFF'],
+      dispatch({
+        type: 'SET_BUSINESS',
+        payload: {
+          name: brandName,
+          logoUrl: brandResult.logoUrl ?? null,
+          domain: domain ?? '',
+          brandColors: brandResult.colors ?? ['#FFFFFF'],
+        },
       });
 
-      // Fetch Google Place Details for multiple locations to get seed reviews + lots of photos
       const detailPlaceIds = [
         place.placeId,
         ...chainLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
@@ -277,55 +213,47 @@ export function Onboarding() {
         .then((data) => {
           const allDetails = data.details ?? [];
 
-          setGatheringData((prev) => {
-            const updates: Partial<typeof prev> = {};
+          const allReviews = allDetails.flatMap((d) =>
+            (d.reviews ?? []).map((r) => ({
+              author: r.authorName,
+              rating: r.rating,
+              text: r.text,
+              date: r.relativePublishTimeDescription,
+            })),
+          );
+          if (allReviews.length > 0) {
+            dispatch({ type: 'MERGE_REVIEWS', payload: allReviews });
+          }
 
-            // Seed reviews from the first location with reviews
-            if (!prev.reviews || prev.reviews.length === 0) {
-              const allReviews = allDetails.flatMap((d) =>
-                (d.reviews ?? []).map((r) => ({
-                  author: r.authorName,
-                  rating: r.rating,
-                  text: r.text,
-                  date: r.relativePublishTimeDescription,
-                })),
-              );
-              if (allReviews.length > 0) {
-                updates.reviews = allReviews;
-              }
-            }
-
-            // Collect photos from ALL locations
-            const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
-            if (allPhotos.length > 0) {
-              updates.photos = allPhotos;
-            }
-
-            return { ...prev, ...updates };
-          });
+          const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
+          if (allPhotos.length > 0) {
+            dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
+          }
         })
         .catch(() => {});
 
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
       goForward('confirm-business');
     } catch {
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, []);
+  }, [dispatch]);
 
   const handleBusinessConfirm = useCallback(
     (data: { name: string; website: string; colors: string[] }) => {
       if (business) {
-        setBusiness({ ...business, name: data.name, domain: data.website, brandColors: data.colors });
+        dispatch({
+          type: 'UPDATE_BUSINESS',
+          payload: { name: data.name, domain: data.website, brandColors: data.colors },
+        });
       }
 
       const domain = domainRef.current ?? data.website;
-      const placeIds = locations.map((l) => l.id);
-      startBackgroundFetch(domain, placeIds);
+      startBackgroundFetch(domain);
 
       goForward('confirm-locations');
     },
-    [business, locations, startBackgroundFetch],
+    [business, startBackgroundFetch, dispatch],
   );
 
   const startStaffAnalysisFetch = useCallback((confirmedLocs: LocationItem[]) => {
@@ -336,7 +264,7 @@ export function Onboarding() {
       location: { lat: loc.lat, lng: loc.lng },
     }));
 
-    trackFetchStart('staffAnalysis', 'Staff Analysis (SSE)');
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'staffAnalysis', label: 'Staff Analysis (SSE)' } });
 
     fetch('/api/demo/scan/analyze?lite=1', {
       method: 'POST',
@@ -345,7 +273,7 @@ export function Onboarding() {
     })
       .then(async (res) => {
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        trackSseEvent('staffAnalysis', `connected (${res.status})`);
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `connected (${res.status})` } });
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -359,7 +287,6 @@ export function Onboarding() {
 
           buffer += decoder.decode(value, { stream: true });
 
-          // Process complete SSE messages (separated by \n\n)
           let boundary: number;
           while ((boundary = buffer.indexOf('\n\n')) !== -1) {
             const message = buffer.slice(0, boundary);
@@ -385,86 +312,76 @@ export function Onboarding() {
                 if (eventName === 'batch_analysis') {
                   const mentions = data.mentions as StaffMention[];
                   mentionCount += mentions.length;
-                  trackSseEvent('staffAnalysis', `batch_analysis: +${mentions.length} mentions (total: ${mentionCount})`);
-                  setGatheringData((prev) => ({
-                    ...prev,
-                    staffMentions: [...prev.staffMentions, ...mentions],
-                  }));
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `batch_analysis: +${mentions.length} mentions (total: ${mentionCount})` } });
+                  dispatch({ type: 'APPEND_STAFF_MENTIONS', payload: mentions });
                 } else if (eventName === 'analysis') {
-                  trackSseEvent('staffAnalysis', `analysis: final (${data.mentions?.length ?? 0} mentions)`);
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `analysis: final (${data.mentions?.length ?? 0} mentions)` } });
                   const analysis = data as StaffAnalysis;
-                  setGatheringData((prev) => ({
-                    ...prev,
-                    staffAnalysis: analysis,
-                    staffMentions: analysis.mentions,
-                  }));
+                  dispatch({ type: 'SET_STAFF_ANALYSIS', payload: analysis });
                 } else if (eventName === 'error') {
-                  trackSseEvent('staffAnalysis', `ERROR: ${data.message ?? JSON.stringify(data)}`);
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
                 } else if (eventName === 'timing') {
-                  trackSseEvent('staffAnalysis', `timing: ${data.label} (${data.detail ?? ''})`);
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `timing: ${data.label} (${data.detail ?? ''})` } });
                 } else if (eventName === 'reviews_progress') {
-                  trackSseEvent('staffAnalysis', `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})`);
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
                 } else if (eventName === 'done') {
-                  trackSseEvent('staffAnalysis', 'done');
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: 'done' } });
                 } else {
-                  trackSseEvent('staffAnalysis', `${eventName}`);
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `${eventName}` } });
                 }
               } catch {
-                trackSseEvent('staffAnalysis', `parse-error: ${eventName}`);
+                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `parse-error: ${eventName}` } });
               }
             }
           }
         }
 
-        trackSseEvent('staffAnalysis', 'stream closed');
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: 'stream closed' } });
 
-        // If no analysis event was received (e.g. no mentions found), set fallback
-        setGatheringData((prev) => {
-          if (prev.staffAnalysis !== null) return prev;
-          return {
-            ...prev,
-            staffAnalysis: {
-              headline: '',
-              body: '',
-              standoutEmployee: null,
-              mentions: prev.staffMentions,
-              totalReviewsAnalyzed: 0,
-              positiveCount: 0,
-              negativeCount: 0,
-              namedEmployees: [],
-            },
-          };
-        });
-
-        trackFetchEnd('staffAnalysis', 'done');
-      })
-      .catch((err: unknown) => {
-        // Set fallback empty analysis so the phase can complete
-        setGatheringData((prev) => ({
-          ...prev,
-          staffAnalysis: {
+        // Set fallback analysis only if no analysis event was received
+        dispatch({
+          type: 'SET_STAFF_ANALYSIS_FALLBACK',
+          payload: {
             headline: '',
             body: '',
             standoutEmployee: null,
-            mentions: prev.staffMentions,
+            mentions: [],
             totalReviewsAnalyzed: 0,
             positiveCount: 0,
             negativeCount: 0,
             namedEmployees: [],
           },
-        }));
-        trackFetchEnd('staffAnalysis', 'error', err instanceof Error ? err.message : 'Unknown error');
+        });
+
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'staffAnalysis', status: 'done' } });
+      })
+      .catch((err: unknown) => {
+        dispatch({
+          type: 'SET_STAFF_ANALYSIS',
+          payload: {
+            headline: '',
+            body: '',
+            standoutEmployee: null,
+            mentions: [],
+            totalReviewsAnalyzed: 0,
+            positiveCount: 0,
+            negativeCount: 0,
+            namedEmployees: [],
+          },
+        });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'staffAnalysis', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
       });
-  }, [trackFetchStart, trackFetchEnd, trackSseEvent]);
+  }, [dispatch]);
 
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
+    startReviewsFetch(confirmedLocs.map((l) => l.id));
     startStaffAnalysisFetch(confirmedLocs);
-  }, [startStaffAnalysisFetch]);
+  }, [startReviewsFetch, startStaffAnalysisFetch]);
 
   const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
-    setLocations(confirmedLocs);
+    dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
     goForward('gathering');
-  }, []);
+  }, [dispatch]);
 
   const handleGatheringComplete = useCallback(() => {
     // No-op: stay on gathering page (branded-app phase)
@@ -475,9 +392,9 @@ export function Onboarding() {
       goBack('confirm-business');
     } else if (step === 'confirm-business') {
       goBack('search');
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [step]);
+  }, [step, dispatch]);
 
   const showBack = step === 'confirm-business' || step === 'confirm-locations';
   const showLogo = step === 'search';
@@ -550,9 +467,6 @@ export function Onboarding() {
         {step === 'gathering' && business && (
           <StepGathering
             key="step-gathering"
-            business={business}
-            locations={locations}
-            gatheringData={gatheringData}
             onComplete={handleGatheringComplete}
           />
         )}
@@ -600,6 +514,7 @@ function LiveElapsed({ startedAt }: { startedAt: number }) {
 }
 
 function FetchTimingsDebug({ timings }: { timings: Record<string, FetchTiming> }) {
+  const [collapsed, setCollapsed] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const entries = Object.entries(timings);
   if (entries.length === 0) return null;
@@ -613,44 +528,54 @@ function FetchTimingsDebug({ timings }: { timings: Record<string, FetchTiming> }
   };
 
   return (
-    <div className="fixed bottom-4 left-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono space-y-1.5 backdrop-blur-sm min-w-[280px] max-w-[420px] max-h-[60vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-      <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">API Timings</div>
-      {entries.map(([key, t]) => (
-        <div key={key}>
-          <div
-            className="flex items-center justify-between gap-4 cursor-pointer hover:bg-white/5 -mx-1 px-1 rounded"
-            onClick={() => t.sseEvents?.length ? toggle(key) : undefined}
-          >
-            <span className="text-gray-300">
-              {t.label}
-              {t.sseEvents?.length ? (
-                <span className="text-gray-500 ml-1">({t.sseEvents.length} events)</span>
-              ) : null}
-            </span>
-            <span className={t.status === 'done' ? 'text-green-400' : t.status === 'error' ? 'text-red-400' : 'text-yellow-400'}>
-              {t.status === 'pending' ? (
-                <LiveElapsed startedAt={t.startedAt} />
-              ) : (
-                `${(t.durationMs! / 1000).toFixed(1)}s`
-              )}
-            </span>
-          </div>
-          {t.status === 'error' && t.errorMessage && (
-            <div className="text-red-400/80 text-[10px] mt-0.5 break-words leading-tight">
-              {t.errorMessage}
-            </div>
-          )}
-          {expandedKeys.has(key) && t.sseEvents && (
-            <div className="ml-2 mt-1 mb-1 space-y-0.5 border-l border-gray-600 pl-2">
-              {t.sseEvents.map((evt, i) => (
-                <div key={i} className="text-[10px] text-gray-400 break-words leading-tight">
-                  {evt}
+    <div className="fixed bottom-4 left-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono backdrop-blur-sm min-w-[280px] max-w-[420px]">
+      <div
+        className="flex items-center justify-between cursor-pointer select-none"
+        onClick={() => setCollapsed((p) => !p)}
+      >
+        <span className="text-[10px] uppercase tracking-wider text-gray-400">API Timings</span>
+        <span className="text-gray-500 text-[10px]">{collapsed ? '▸' : '▾'}</span>
+      </div>
+      {!collapsed && (
+        <div className="space-y-1.5 mt-1.5 max-h-[60vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+          {entries.map(([key, t]) => (
+            <div key={key}>
+              <div
+                className="flex items-center justify-between gap-4 cursor-pointer hover:bg-white/5 -mx-1 px-1 rounded"
+                onClick={() => t.sseEvents?.length ? toggle(key) : undefined}
+              >
+                <span className="text-gray-300">
+                  {t.label}
+                  {t.sseEvents?.length ? (
+                    <span className="text-gray-500 ml-1">({t.sseEvents.length} events)</span>
+                  ) : null}
+                </span>
+                <span className={t.status === 'done' ? 'text-green-400' : t.status === 'error' ? 'text-red-400' : 'text-yellow-400'}>
+                  {t.status === 'pending' ? (
+                    <LiveElapsed startedAt={t.startedAt} />
+                  ) : (
+                    `${(t.durationMs! / 1000).toFixed(1)}s`
+                  )}
+                </span>
+              </div>
+              {t.status === 'error' && t.errorMessage && (
+                <div className="text-red-400/80 text-[10px] mt-0.5 break-words leading-tight">
+                  {t.errorMessage}
                 </div>
-              ))}
+              )}
+              {expandedKeys.has(key) && t.sseEvents && (
+                <div className="ml-2 mt-1 mb-1 space-y-0.5 border-l border-gray-600 pl-2">
+                  {t.sseEvents.map((evt, i) => (
+                    <div key={i} className="text-[10px] text-gray-400 break-words leading-tight">
+                      {evt}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

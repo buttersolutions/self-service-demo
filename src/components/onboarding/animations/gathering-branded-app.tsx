@@ -1,20 +1,22 @@
 'use client';
 
+import { useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Home, TrendingUp, FileText, GraduationCap, CalendarDays,
   Users, Puzzle, MessageCircle, Bell, Settings,
   Heart, Eye, CornerDownLeft, SmilePlus, MoreVertical, Plus, MapPin, CalendarPlus,
+  Check, Palmtree, Briefcase, Mail,
 } from 'lucide-react';
-import { deriveBrandPalette, relativeLuminance, isTooLight } from '@/lib/colors';
-import { OnboardingButton } from '../ui';
+import { OnboardingButton, OnboardingInput } from '../ui';
+import { useOnboarding } from '@/lib/demo-flow-context';
+import { AllgravyLogo } from '@/components/ui/allgravy-logo';
 import type { LocationItem } from '../types';
 import type { PlacePhoto } from '@/lib/types';
 
 interface GatheringBrandedAppProps {
   businessName: string;
   logoUrl: string | null;
-  brandColors: string[];
   locations: LocationItem[];
   photos: PlacePhoto[];
   isActive: boolean;
@@ -57,16 +59,21 @@ const NAV_ITEMS: { label: string; icon: typeof Home }[] = [
 
 // ── Full-size feed replica (1200×750, scaled down via CSS transform) ──
 
+const stagger = (base: number, i: number) => ({ delay: base + i * 0.12, duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] });
+const fadeUp = { initial: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } };
+
 function FeedReplica({
   businessName,
   logoUrl,
   primaryColor,
   photos,
+  animate,
 }: {
   businessName: string;
   logoUrl: string | null;
   primaryColor: string;
   photos: PlacePhoto[];
+  animate: boolean;
 }) {
   const photo1 = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
   const photo2 = photos[3] ? `/api/places/photo?name=${encodeURIComponent(photos[3].name)}&maxWidthPx=600` : undefined;
@@ -75,7 +82,12 @@ function FeedReplica({
   return (
     <div className="w-[1200px] h-[750px] bg-white flex flex-col" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* ── Top nav bar ─────────────────────────────────────────── */}
-      <nav className="h-[72px] w-full flex items-center justify-between px-6 shrink-0 bg-white">
+      <motion.nav
+        className="h-[72px] w-full flex items-center justify-between px-6 shrink-0 bg-white"
+        initial={fadeUp.initial}
+        animate={animate ? fadeUp.visible : fadeUp.initial}
+        transition={stagger(0.3, 0)}
+      >
         {/* Logo */}
         <div className="flex items-center w-[200px]">
           {logoUrl ? (
@@ -94,16 +106,16 @@ function FeedReplica({
               <div
                 key={item.label}
                 className="flex h-14 w-16 flex-col items-center justify-center gap-0.5 rounded-xl"
-                style={isActive ? { backgroundColor: 'rgba(98, 92, 228, 0.1)' } : {}}
+                style={isActive ? { backgroundColor: '#f9fafb' } : {}}
               >
                 <Icon
                   className="size-5"
-                  style={{ color: isActive ? '#625CE4' : '#4b5563' }}
+                  style={{ color: isActive ? primaryColor : '#4b5563' }}
                   strokeWidth={isActive ? 2.2 : 1.5}
                 />
                 <span
                   className="text-[10px] font-medium"
-                  style={{ color: isActive ? '#625CE4' : '#4b5563' }}
+                  style={{ color: isActive ? primaryColor : '#4b5563' }}
                 >
                   {item.label}
                 </span>
@@ -131,20 +143,26 @@ function FeedReplica({
           </div>
           <img src={PEOPLE[0].avatar} alt="" className="size-9 rounded-xl object-cover border border-[#e5e7eb]" />
         </div>
-      </nav>
+      </motion.nav>
 
       {/* ── Main content ───────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden px-6">
-        {/* Hero image */}
+        {/* Hero image (commented out)
         {heroPhoto && (
           <div className="w-full h-48 rounded-xl overflow-hidden mt-1 mb-0">
             <img src={heroPhoto} alt="" className="w-full h-full object-cover" />
           </div>
         )}
+        */}
 
-        <div className="flex gap-6 py-6">
+        <div className="flex gap-6 pb-6">
           {/* ── Left sidebar: Feeds ────────────────────────────── */}
-          <div className="w-48 shrink-0">
+          <motion.div
+            className="w-48 shrink-0"
+            initial={fadeUp.initial}
+            animate={animate ? fadeUp.visible : fadeUp.initial}
+            transition={stagger(0.3, 1)}
+          >
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-semibold text-gray-900">Feeds</span>
               <Plus className="size-4 text-gray-400" />
@@ -153,9 +171,9 @@ function FeedReplica({
             {/* For you — selected */}
             <div
               className="flex h-8 items-center gap-2 rounded-md px-3 py-1 text-sm font-medium shadow-sm mb-0.5 bg-white"
-              style={{ color: '#625CE4' }}
+              style={{ color: primaryColor }}
             >
-              <Heart className="size-4 mx-0.5" fill="#625CE4" style={{ color: '#625CE4' }} />
+              <Heart className="size-4 mx-0.5" fill={primaryColor} style={{ color: primaryColor }} />
               For you
             </div>
 
@@ -166,17 +184,26 @@ function FeedReplica({
                 <span>{feed.name}</span>
               </div>
             ))}
-          </div>
+          </motion.div>
 
           {/* ── Center: Feed ───────────────────────────────────── */}
           <div className="flex-1 max-w-2xl mx-auto space-y-3">
             {/* Posts header */}
-            <div className="flex items-center">
+            <motion.div
+              className="flex items-center"
+              initial={fadeUp.initial}
+              animate={animate ? fadeUp.visible : fadeUp.initial}
+              transition={stagger(0.3, 2)}
+            >
               <span className="text-sm font-semibold text-gray-900">Posts</span>
-            </div>
+            </motion.div>
 
             {/* Composer card */}
-            <div className="bg-white rounded-xl p-4 pb-2" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+            <motion.div
+              className="bg-white rounded-xl p-4 pb-2"
+              initial={fadeUp.initial}
+              animate={animate ? fadeUp.visible : fadeUp.initial}
+              transition={stagger(0.3, 3)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3">
                 <img src={PEOPLE[0].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
                 <div className="flex-1">
@@ -185,10 +212,10 @@ function FeedReplica({
                   <div className="text-sm text-gray-400 h-5">Write something here...</div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Post 1: with image */}
-            <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+            <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 4)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
                 <img src={PEOPLE[1].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -240,10 +267,10 @@ function FeedReplica({
                   Reply
                 </button>
               </div>
-            </div>
+            </motion.div>
 
             {/* Post 2: text only */}
-            <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+            <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 5)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
                 <img src={PEOPLE[2].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -277,46 +304,75 @@ function FeedReplica({
                   Reply
                 </button>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* ── Right sidebar ──────────────────────────────────── */}
-          <div className="w-52 shrink-0 space-y-6">
+          <motion.div
+            className="w-52 shrink-0 space-y-6"
+            initial={fadeUp.initial}
+            animate={animate ? fadeUp.visible : fadeUp.initial}
+            transition={stagger(0.3, 6)}
+          >
+            {/* Todo's */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-900">Todo&apos;s</h2>
+                <span className="text-xs text-gray-400 font-medium">View all</span>
+              </div>
+              <div className="space-y-2.5">
+                {/* Time off request */}
+                <div className="p-3 bg-white rounded-xl" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+                  <div className="flex items-start gap-2.5">
+                    <div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                      <Palmtree className="size-3 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <img src={PEOPLE[2].avatar} alt="" className="size-4 rounded-full object-cover" />
+                        <span className="text-sm font-semibold text-gray-900 truncate">{PEOPLE[2].name}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">🌴 Vacation · 5 days</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Shift coverage */}
+                <div className="p-3 bg-white rounded-xl" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+                  <div className="flex items-start gap-2.5">
+                    <div className="size-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="size-3 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-gray-900">Approve shift swap</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Fri evening · Floor staff</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Events */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-gray-900">Events</h2>
                 <span className="text-xs text-gray-400 font-medium">View all</span>
               </div>
-              <div className="flex flex-col items-center text-center space-y-3 py-3 px-3 bg-gray-100/50 rounded-lg">
-                <p className="text-xs text-gray-400">No upcoming events</p>
-                <div className="flex items-center justify-center gap-2 w-full h-8 text-xs text-gray-500 border border-gray-200 rounded-lg bg-white">
-                  <CalendarPlus className="size-3.5" />
-                  Add event
+              <div className="space-y-2.5">
+                <div className="p-3 bg-white rounded-xl" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+                  <p className="text-xs text-gray-400 mb-0.5">Today · 2:00 PM</p>
+                  <h3 className="text-sm font-semibold text-gray-900">Pre-service briefing</h3>
+                </div>
+                <div className="p-3 bg-white rounded-xl" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+                  <p className="text-xs text-gray-400 mb-0.5">Tomorrow · 10:00 AM</p>
+                  <h3 className="text-sm font-semibold text-gray-900">Health & Safety audit</h3>
+                </div>
+                <div className="p-3 bg-white rounded-xl" style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
+                  <p className="text-xs text-gray-400 mb-0.5">Fri · 6:00 PM</p>
+                  <h3 className="text-sm font-semibold text-gray-900">Wine tasting evening</h3>
                 </div>
               </div>
             </div>
-
-            {/* Shortcuts */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900 mb-2">Shortcuts</h2>
-              <div className="grid grid-cols-2 gap-4 mt-2">
-                {[
-                  { label: 'Payslips', color: 'bg-blue-500' },
-                  { label: 'Benefits', color: 'bg-emerald-500' },
-                  { label: 'Handbook', color: 'bg-orange-500' },
-                  { label: 'Time Off', color: 'bg-purple-500' },
-                ].map((s) => (
-                  <div key={s.label} className="flex flex-col items-center gap-2 p-2 rounded-xl">
-                    <div className={`size-12 rounded-full ${s.color} flex items-center justify-center text-white font-bold text-xl shadow-md`}>
-                      {s.label.charAt(0)}
-                    </div>
-                    <span className="text-xs text-gray-400">{s.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>
@@ -328,24 +384,57 @@ function FeedReplica({
 function LaptopMockup({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative flex flex-col items-center">
+      {/* Screen lid */}
       <div
         className="relative overflow-hidden"
         style={{
-          width: 740,
-          height: 460,
-          background: '#1a1a1a',
-          padding: 10,
-          borderRadius: '16px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+          width: 810,
+          height: 510,
+          background: 'linear-gradient(180deg, #2c2c2c 0%, #1a1a1a 4%, #1a1a1a 100%)',
+          padding: '20px 16px 16px',
+          borderRadius: '16px 16px 0 0',
+          boxShadow: '0 -1px 0 0 rgba(255,255,255,0.05) inset, 0 20px 60px rgba(0,0,0,0.15), 0 8px 20px rgba(0,0,0,0.08)',
         }}
       >
-        <div className="absolute top-[3px] left-1/2 -translate-x-1/2 size-[4px] rounded-full bg-gray-600" />
-        <div className="w-full h-full rounded-lg overflow-hidden">
+        {/* Webcam */}
+        <div className="absolute top-[7px] left-1/2 -translate-x-1/2 flex items-center justify-center">
+          <div className="size-[6px] rounded-full bg-[#2a2a2a] ring-1 ring-[#333]" />
+          <div className="absolute size-[2px] rounded-full bg-[#1a3a1a] opacity-60" />
+        </div>
+        {/* Screen bezel */}
+        <div className="w-full h-full rounded-[4px] overflow-hidden bg-black">
           {children}
         </div>
+        {/* Subtle screen reflection */}
+        <div
+          className="absolute inset-0 pointer-events-none rounded-[16px]"
+          style={{
+            background: 'linear-gradient(115deg, rgba(255,255,255,0.03) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.01) 100%)',
+          }}
+        />
       </div>
-      <div style={{ width: 780, height: 14, background: 'linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%)', borderRadius: '0 0 8px 8px' }} />
-      <div className="mx-auto" style={{ width: 160, height: 3, background: '#333', borderRadius: '0 0 4px 4px' }} />
+      {/* Hinge */}
+      <div
+        style={{
+          width: 810,
+          height: 8,
+          background: 'linear-gradient(180deg, #0f0f0f 0%, #2a2a2a 40%, #1f1f1f 100%)',
+          borderRadius: '0 0 2px 2px',
+          boxShadow: '0 1px 0 0 rgba(255,255,255,0.04) inset',
+        }}
+      />
+      {/* Base / keyboard deck */}
+      <div
+        style={{
+          width: 870,
+          height: 14,
+          background: 'linear-gradient(180deg, #2e2e2e 0%, #1c1c1c 100%)',
+          borderRadius: '0 0 8px 8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12), 0 1px 0 0 rgba(255,255,255,0.04) inset',
+        }}
+      />
+      {/* Front lip notch */}
+      <div className="mx-auto" style={{ width: 120, height: 4, background: 'linear-gradient(180deg, #333 0%, #222 100%)', borderRadius: '0 0 4px 4px', marginTop: -1 }} />
     </div>
   );
 }
@@ -365,12 +454,14 @@ function MobileFeedReplica({
   primaryColor,
   headerColor,
   photos,
+  animate,
 }: {
   businessName: string;
   logoUrl: string | null;
   primaryColor: string;
   headerColor: string;
   photos: PlacePhoto[];
+  animate: boolean;
 }) {
   const storyPhoto1 = photos[2] ? `/api/places/photo?name=${encodeURIComponent(photos[2].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop';
   const storyPhoto2 = photos[4] ? `/api/places/photo?name=${encodeURIComponent(photos[4].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&h=400&fit=crop';
@@ -378,10 +469,13 @@ function MobileFeedReplica({
   const postPhoto = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
 
   return (
-    <div className="relative w-[390px] h-[844px] bg-white flex flex-col overflow-hidden" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div className="relative w-[390px] h-[870px] bg-white flex flex-col overflow-hidden" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* ── Status bar + Header (single block, no gap) ─────── */}
-      <div
+      <motion.div
         className="shrink-0 px-5 pb-5"
+        initial={fadeUp.initial}
+        animate={animate ? fadeUp.visible : fadeUp.initial}
+        transition={stagger(0.4, 0)}
         style={{
           backgroundColor: headerColor,
           borderRadius: '0 0 24px 24px',
@@ -398,7 +492,7 @@ function MobileFeedReplica({
         </div>
         <div className="flex items-center justify-between">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-11 object-contain" />
+            <img src={logoUrl} alt="" className="h-11 object-contain rounded-lg" />
           ) : (
             <span className="text-[26px] font-black text-white">{businessName}</span>
           )}
@@ -414,10 +508,10 @@ function MobileFeedReplica({
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── Feed selector ─────────────────────────────────────── */}
-      <div className="shrink-0 px-3 pt-4 pb-2 flex gap-3.5 overflow-hidden items-start">
+      <motion.div className="shrink-0 px-3 pt-4 pb-2 flex gap-3.5 overflow-hidden items-start" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 1)}>
         {/* For you — circle with red border (selected) */}
         <div className="shrink-0 flex flex-col items-center gap-1">
           <div className="relative">
@@ -451,10 +545,10 @@ function MobileFeedReplica({
             <span className="text-[11px] mt-1 text-black text-center leading-tight max-w-[75px] whitespace-pre-line">{feed.name}</span>
           </div>
         ))}
-      </div>
+      </motion.div>
 
       {/* ── Broadcasts (horizontal scroll, 160×200 cards) ─────── */}
-      <div className="shrink-0 pl-3 pb-4 pt-1 flex gap-3 overflow-hidden">
+      <motion.div className="shrink-0 pl-3 pb-4 pt-1 flex gap-3 overflow-hidden" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 2)}>
         <div className="w-[148px] h-[200px] rounded-xl overflow-hidden relative shrink-0">
           <img src={storyPhoto1} alt="" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -470,10 +564,10 @@ function MobileFeedReplica({
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
           <p className="absolute bottom-4 left-4 text-white text-[15px] font-bold leading-tight">Team Lunch</p>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── Feed post (with photo) ────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100">
+      <motion.div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 3)}>
         <div className="px-4 pt-4 pb-1">
           <div className="flex items-start gap-3 mb-2">
             <img src={PEOPLE[1].avatar} alt="" className="size-11 rounded-xl object-cover shrink-0" />
@@ -492,7 +586,7 @@ function MobileFeedReplica({
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* ── FAB (60×60) ───────────────────────────────────────── */}
       <div
@@ -528,116 +622,245 @@ function MobileFeedReplica({
       </div>
 
       {/* Safe area bottom spacer */}
-      <div className="shrink-0 h-6 bg-white" />
+      <div className="shrink-0 h-10 bg-white" />
     </div>
   );
 }
 
 function PhoneMockup({ children }: { children?: React.ReactNode }) {
   return (
-    <div
-      className="relative overflow-hidden"
-      style={{
-        width: 200, height: 432,
-        borderRadius: 28,
-        border: '4px solid #1a1a1a',
-        backgroundColor: '#ffffff',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.20), 0 8px 20px rgba(0,0,0,0.10)',
-      }}
-    >
-      <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-20 rounded-full" style={{ width: 50, height: 14, backgroundColor: '#1a1a1a' }} />
-      <div className="w-full h-full overflow-hidden rounded-[24px]">
-        {children ?? (
-          <div className="w-full h-full" style={{ background: 'linear-gradient(180deg, #fafafa 0%, #f0f0f2 100%)' }} />
-        )}
+    <div className="relative">
+      {/* Side buttons — left: silent switch + volume */}
+      <div className="absolute -left-[2px] top-[80px] w-[3px] h-[8px] rounded-l-sm" style={{ background: 'linear-gradient(90deg, #333 0%, #1a1a1a 100%)' }} />
+      <div className="absolute -left-[2px] top-[110px] w-[3px] h-[24px] rounded-l-sm" style={{ background: 'linear-gradient(90deg, #333 0%, #1a1a1a 100%)' }} />
+      <div className="absolute -left-[2px] top-[142px] w-[3px] h-[24px] rounded-l-sm" style={{ background: 'linear-gradient(90deg, #333 0%, #1a1a1a 100%)' }} />
+      {/* Side button — right: power */}
+      <div className="absolute -right-[2px] top-[120px] w-[3px] h-[32px] rounded-r-sm" style={{ background: 'linear-gradient(270deg, #333 0%, #1a1a1a 100%)' }} />
+
+      {/* Phone frame */}
+      <div
+        className="relative overflow-hidden"
+        style={{
+          width: 264, height: 570,
+          borderRadius: 36,
+          border: '9px solid #1a1a1a',
+          backgroundColor: '#1a1a1a',
+          boxShadow: '0 25px 70px rgba(0,0,0,0.25), 0 10px 25px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.06)',
+        }}
+      >
+        {/* Dynamic Island */}
+        <div
+          className="absolute top-[10px] left-1/2 -translate-x-1/2 z-20 flex items-center justify-center"
+          style={{
+            width: 72, height: 20,
+            borderRadius: 20,
+            backgroundColor: '#000',
+          }}
+        >
+          <div className="absolute right-[8px] size-[6px] rounded-full bg-[#0a0a0a] ring-1 ring-[#1a1a1a]" />
+        </div>
+        {/* Screen content */}
+        <div className="w-full h-full overflow-hidden rounded-[27px]">
+          {children ?? (
+            <div className="w-full h-full" style={{ background: 'linear-gradient(180deg, #fafafa 0%, #f0f0f2 100%)' }} />
+          )}
+        </div>
+        {/* Screen reflection */}
+        <div
+          className="absolute inset-0 pointer-events-none rounded-[27px]"
+          style={{
+            background: 'linear-gradient(125deg, rgba(255,255,255,0.06) 0%, transparent 35%, transparent 65%, rgba(255,255,255,0.02) 100%)',
+          }}
+        />
+        {/* Home indicator */}
+        <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2 rounded-full z-20" style={{ width: 80, height: 4, backgroundColor: 'rgba(0,0,0,0.2)' }} />
       </div>
-      <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full z-20" style={{ width: 60, height: 4, backgroundColor: '#1a1a1a', opacity:0.2 }} />
     </div>
   );
 }
+
+// ── Checklist items ──────────────────────────────────────────────────
+
+const CHECKLIST_ITEMS = [
+  'Courses addressing your top review issues',
+  'Channels set up for each of your locations',
+  'Todo\'s created to boost your weakest areas',
+  'Staff recognition based on customer feedback',
+];
 
 // ── Main component ──────────────────────────────────────────────────
 
 export function GatheringBrandedApp({
   businessName,
   logoUrl,
-  brandColors,
   locations,
   photos,
   isActive,
 }: GatheringBrandedAppProps) {
-  const palette = deriveBrandPalette(brandColors);
-  const primaryColor = palette.primary;
+  const { brandColorMap } = useOnboarding();
+  const primaryColor = brandColorMap.primaryColor;
+  const darkestBrandColor = primaryColor;
 
-  // Pick the darkest usable brand color for the mobile header
-  const usableColors = brandColors.filter((c) => !isTooLight(c));
-  const darkestBrandColor = usableColors.length > 0
-    ? usableColors.reduce((darkest, c) => relativeLuminance(c) < relativeLuminance(darkest) ? c : darkest)
-    : primaryColor;
+  const LAPTOP_SCALE = 780 / 1200;
+  const PHONE_SCALE = 250 / 390;
 
-  const SCALE = 720 / 1200;
+  const MOCKUP_W = 900;
+  const MOCKUP_H = 540;
+  const [mockupScale, setMockupScale] = useState(0.85);
+  const roRef = useRef<ResizeObserver | null>(null);
+
+  const mockupAreaRef = useCallback((node: HTMLDivElement | null) => {
+    if (roRef.current) {
+      roRef.current.disconnect();
+      roRef.current = null;
+    }
+    if (!node) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width === 0 || height === 0) return;
+      const s = Math.min(width / MOCKUP_W, height / MOCKUP_H, 1200 / MOCKUP_W, 800 / MOCKUP_H) * 0.75;
+      setMockupScale(Math.max(0.4, s));
+    });
+    ro.observe(node);
+    roRef.current = ro;
+  }, []);
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center px-6">
-      <motion.div
-        className="text-center mb-4"
-        initial={{ opacity: 0, y: 16 }}
-        animate={isActive ? { opacity: 1, y: 0 } : {}}
-        transition={{ delay: 0.2, duration: 0.5 }}
-      >
-        <h3 className="text-2xl font-semibold text-gray-900 font-serif mb-2">
-          Your branded app is ready
-        </h3>
-        <p className="text-sm text-gray-400">
-          {businessName} — powered by Allgravy
-        </p>
-      </motion.div>
-
-      <div className="relative mb-8" style={{ width: 860, height: 500 }}>
+    <div className="w-full h-full flex">
+        {/* Left sidebar */}
         <motion.div
-          className="absolute bottom-0 left-0"
-          initial={{ opacity: 0, y: 30, scale: 0.92 }}
-          animate={isActive ? { opacity: 1, y: 0, scale: 1 } : {}}
-          transition={{ delay: 0.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          className="w-64 shrink-0 m-4 flex flex-col rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] font-sans"
+          initial={{ opacity: 0, x: -40 }}
+          animate={isActive ? { opacity: 1, x: 0 } : {}}
+          transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         >
-          <LaptopMockup>
-            <div style={{ width: 1200, height: 750, transform: `scale(${SCALE})`, transformOrigin: 'top left' }}>
-              <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} />
+          <div className="flex-1 px-3.5 py-5">
+            {/* Logo */}
+            <div className="px-2.5 mb-5">
+              <AllgravyLogo className="w-24 text-gray-900" />
             </div>
-          </LaptopMockup>
+
+            {/* Checklist */}
+            <motion.p
+              className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 px-2.5 mb-3"
+              initial={{ opacity: 0 }}
+              animate={isActive ? { opacity: 1 } : {}}
+              transition={{ delay: 0.5 }}
+            >
+              What&apos;s included
+            </motion.p>
+
+            <div className="space-y-2">
+              {CHECKLIST_ITEMS.map((item, i) => (
+                <motion.div
+                  key={i}
+                  className="flex items-start gap-2.5 px-2.5 py-2.5 rounded-xl bg-gray-50"
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={isActive ? { opacity: 1, x: 0 } : {}}
+                  transition={{ delay: 1.0 + i * 0.1, duration: 0.35 }}
+                >
+                  <div className="shrink-0 mt-px">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={isActive ? { scale: 1 } : {}}
+                      transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 1.0 + i * 0.1 }}
+                      className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center"
+                    >
+                      <Check className="size-2.5 text-white" strokeWidth={3} />
+                    </motion.div>
+                  </div>
+                  <span className="text-[13px] font-medium text-gray-900">{item}</span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
         </motion.div>
 
-        <motion.div
-          className="absolute z-10"
-          style={{ right: -20, bottom: 30 }}
-          initial={{ opacity: 0, y: 40, scale: 0.85 }}
-          animate={isActive ? { opacity: 1, y: 0, scale: 1 } : {}}
-          transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <PhoneMockup>
-            <div style={{ width: 390, height: 844, transform: 'scale(0.493)', transformOrigin: 'top left' }}>
-              <MobileFeedReplica
-                businessName={businessName}
-                logoUrl={logoUrl}
-                primaryColor={primaryColor}
-                headerColor={darkestBrandColor}
-                photos={photos}
+        {/* Right side — header + mockups + input */}
+        <div ref={mockupAreaRef} className="flex-1 flex items-center justify-center px-6 py-6 min-w-0">
+          <div className="flex flex-col items-center">
+            {/* Centered header */}
+            <motion.div
+              className="text-center mb-6"
+              initial={{ opacity: 0, y: 16 }}
+              animate={isActive ? { opacity: 1, y: 0 } : {}}
+              transition={{ delay: 0.2, duration: 0.5 }}
+            >
+              <h3 className="text-2xl font-semibold text-gray-900 font-serif mb-1">
+                Your branded app is ready
+              </h3>
+              <p className="text-sm text-gray-400">
+                {businessName} — powered by All Gravy
+              </p>
+            </motion.div>
+
+            {/* Mockup — sized to scaled dimensions */}
+            <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
+              <div
+                style={{
+                  width: MOCKUP_W,
+                  height: MOCKUP_H,
+                  transform: `scale(${mockupScale})`,
+                  transformOrigin: 'top left',
+                }}
+              >
+              <motion.div
+                className="absolute bottom-0 left-0"
+                initial={{ opacity: 0, y: 30, scale: 0.92 }}
+                animate={isActive ? { opacity: 1, y: 0, scale: 1 } : {}}
+                transition={{ delay: 0.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <LaptopMockup>
+                  <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
+                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                  </div>
+                </LaptopMockup>
+              </motion.div>
+
+              <motion.div
+                className="absolute z-10"
+                style={{ right: -20, bottom: -15 }}
+                initial={{ opacity: 0, y: 40, scale: 0.85, rotate: 0 }}
+                animate={isActive ? { opacity: 1, y: 0, scale: 1, rotate: 3 } : {}}
+                transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <PhoneMockup>
+                  <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
+                    <MobileFeedReplica
+                      businessName={businessName}
+                      logoUrl={logoUrl}
+                      primaryColor={primaryColor}
+                      headerColor={darkestBrandColor}
+                      photos={photos}
+                      animate={isActive}
+                    />
+                  </div>
+                </PhoneMockup>
+              </motion.div>
+              </div>
+            </div>
+
+            {/* Email + CTA underneath */}
+            <motion.div
+              className="flex items-center gap-2 w-full max-w-md mt-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={isActive ? { opacity: 1, y: 0 } : {}}
+              transition={{ delay: 1.3, duration: 0.4 }}
+            >
+              <OnboardingInput
+                type="email"
+                placeholder="Enter your work email"
+                icon={<Mail className="size-4" />}
+                className="!h-11 !rounded-xl !text-sm flex-1"
               />
-            </div>
-          </PhoneMockup>
-        </motion.div>
-      </div>
-
-      <motion.div
-        className="w-full max-w-sm"
-        initial={{ opacity: 0, y: 10 }}
-        animate={isActive ? { opacity: 1, y: 0 } : {}}
-        transition={{ delay: 1.2, duration: 0.4 }}
-      >
-        <OnboardingButton active>
-          Get in
-        </OnboardingButton>
-      </motion.div>
+              <button
+                className="h-11 px-6 rounded-xl text-sm font-medium text-white shrink-0 bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_1px_3px_rgba(98,92,228,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
+              >
+                Get started
+              </button>
+            </motion.div>
+          </div>
+        </div>
     </div>
   );
 }

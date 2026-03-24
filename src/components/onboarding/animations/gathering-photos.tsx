@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PlacePhoto } from '@/lib/types';
+import { useOnboarding } from '@/lib/demo-flow-context';
 
 interface GatheringPhotosProps {
   photos: PlacePhoto[];
   logoUrl: string | null;
-  brandColors: string[];
   businessName: string;
   isActive: boolean;
   onAllPhotosShown?: () => void;
@@ -84,12 +84,12 @@ function PhotoCard({ photo, layout }: { photo: PlacePhoto; layout: PhotoLayout }
 export function GatheringPhotos({
   photos,
   logoUrl,
-  brandColors,
   businessName,
   isActive,
   onAllPhotosShown,
   onComplete,
 }: GatheringPhotosProps) {
+  const { brandColorMap } = useOnboarding();
   const [visiblePhotos, setVisiblePhotos] = useState(0);
   const displayPhotos = photos.slice(0, 16);
   const calledRef = useRef(false);
@@ -159,7 +159,7 @@ export function GatheringPhotos({
               zIndex: 20,
               boxShadow: '0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
               border: '3px solid white',
-              background: brandColors[0] || '#f9fafb',
+              background: brandColorMap.primaryColor || '#f9fafb',
             }}
             initial={{ opacity: 0, y: 40, x: -180, scale: 0.5 }}
             animate={{ opacity: 1, y: -160, x: -180, scale: 1, rotate: -3 }}

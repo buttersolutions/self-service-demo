@@ -2,6 +2,25 @@ import type { CompanyInsight } from '@/lib/saber';
 import type { WaterfallCompany, WaterfallPerson } from '@/lib/waterfall';
 import type { PlacePhoto, StaffMention, StaffAnalysis } from '@/lib/types';
 
+export type Step = 'search' | 'confirm-business' | 'confirm-locations' | 'gathering' | 'done';
+
+export interface BusinessData {
+  name: string;
+  logoUrl: string | null;
+  domain: string;
+  brandColors: string[];
+}
+
+export interface FetchTiming {
+  label: string;
+  startedAt: number;
+  finishedAt: number | null;
+  durationMs: number | null;
+  status: 'pending' | 'done' | 'error';
+  errorMessage?: string;
+  sseEvents?: string[];
+}
+
 export interface LocationItem {
   id: string;
   name: string;

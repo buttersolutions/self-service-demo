@@ -82,6 +82,34 @@ function deriveSecondary(primary: string): string {
   return shade(primary, 0.3);
 }
 
+export interface BrandColorMap {
+  primaryColor: string;
+  primaryTextColor: string;
+  secondaryColor: string;
+  secondaryTextColor: string;
+  highlightColor: string;
+}
+
+/**
+ * Derive a full brand color map from raw brand colors.
+ * Filters out too-light colors, sorts by luminance (darkest first).
+ */
+export function deriveBrandColorMap(brandColors: string[]): BrandColorMap {
+  const usable = brandColors
+    .filter((c) => !isTooLight(c))
+    .sort((a, b) => relativeLuminance(a) - relativeLuminance(b));
+
+  const primaryColor = usable[0] ?? DEFAULT_PRIMARY;
+  const primaryTextColor = contrastForeground(primaryColor);
+
+  const secondaryColor = usable[1] ?? deriveSecondary(primaryColor);
+  const secondaryTextColor = contrastForeground(secondaryColor);
+
+  const highlightColor = usable[2] ?? tint(primaryColor, 0.4);
+
+  return { primaryColor, primaryTextColor, secondaryColor, secondaryTextColor, highlightColor };
+}
+
 /**
  * Takes raw brand colors (from Logo.dev or similar) and produces a design-ready
  * palette with primary/secondary pairs and their contrast foregrounds.
