@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useCallback } from 'react';
+import { GetStartedDialog } from '../get-started-dialog';
 import { motion } from 'framer-motion';
 import {
   Home, TrendingUp, FileText, GraduationCap, CalendarDays,
@@ -701,6 +702,8 @@ export function GatheringBrandedApp({
   const primaryColor = brandColorMap.primaryColor;
   const darkestBrandColor = primaryColor;
 
+  const [dialogOpen, setDialogOpen] = useState(false);
+
   const LAPTOP_SCALE = 780 / 1200;
   const PHONE_SCALE = 250 / 390;
 
@@ -874,12 +877,15 @@ export function GatheringBrandedApp({
             transition={{ delay: 1.2, duration: 0.5 }}
           >
             <button
+              onClick={() => setDialogOpen(true)}
               className="h-12 px-20 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_2px_8px_rgba(98,92,228,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
             >
-              Get in
+              Get started
             </button>
           </motion.div>
         </div>
+
+        <GetStartedDialog open={dialogOpen} onOpenChange={setDialogOpen} />
       </motion.div>
     </div>
   );
