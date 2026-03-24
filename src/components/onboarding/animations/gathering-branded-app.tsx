@@ -718,7 +718,7 @@ export function GatheringBrandedApp({
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
       if (width === 0 || height === 0) return;
-      const s = Math.min(width / MOCKUP_W, height / MOCKUP_H, 1200 / MOCKUP_W, 800 / MOCKUP_H) * 0.75;
+      const s = Math.min(width / MOCKUP_W, height / MOCKUP_H, 1200 / MOCKUP_W, 800 / MOCKUP_H) * 0.7;
       setMockupScale(Math.max(0.4, s));
     });
     ro.observe(node);
@@ -726,10 +726,16 @@ export function GatheringBrandedApp({
   }, []);
 
   return (
-    <div className="w-full h-full flex">
+    <div className="w-full h-full p-4 bg-[#625CE4]">
+      <motion.div
+        className="w-full h-full flex rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
+        initial={{ opacity: 0 }}
+        animate={isActive ? { opacity: 1 } : {}}
+        transition={{ delay: 0.1, duration: 0.4 }}
+      >
         {/* Left sidebar */}
         <motion.div
-          className="w-64 shrink-0 m-4 flex flex-col rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] font-sans"
+          className="w-72 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
           initial={{ opacity: 0, x: -40 }}
           animate={isActive ? { opacity: 1, x: 0 } : {}}
           transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -750,11 +756,11 @@ export function GatheringBrandedApp({
               What&apos;s included
             </motion.p>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               {CHECKLIST_ITEMS.map((item, i) => (
                 <motion.div
                   key={i}
-                  className="flex items-start gap-2.5 px-2.5 py-2.5 rounded-xl bg-gray-50"
+                  className="flex items-start gap-2.5 px-2.5"
                   initial={{ opacity: 0, x: -16 }}
                   animate={isActive ? { opacity: 1, x: 0 } : {}}
                   transition={{ delay: 1.0 + i * 0.1, duration: 0.35 }}
@@ -797,6 +803,7 @@ export function GatheringBrandedApp({
             {/* Mockup — sized to scaled dimensions */}
             <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
               <div
+                className="relative"
                 style={{
                   width: MOCKUP_W,
                   height: MOCKUP_H,
@@ -804,10 +811,38 @@ export function GatheringBrandedApp({
                   transformOrigin: 'top left',
                 }}
               >
+              {/* App icon */}
+              <motion.div
+                className="absolute z-10"
+                style={{ left: 0, bottom: 80 }}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={isActive ? { opacity: 1, scale: 1, rotate: -6 } : {}}
+                transition={{ delay: 0.9, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div
+                  className="flex items-center justify-center overflow-hidden"
+                  style={{
+                    width: 88,
+                    height: 88,
+                    borderRadius: 24,
+                    border: '2px solid rgba(255,255,255,0.2)',
+                    backgroundColor: primaryColor,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Laptop */}
               <motion.div
                 className="absolute bottom-0 left-0"
-                initial={{ opacity: 0, y: 30, scale: 0.92 }}
-                animate={isActive ? { opacity: 1, y: 0, scale: 1 } : {}}
+                initial={{ opacity: 0, y: 30, rotate: 0 }}
+                animate={isActive ? { opacity: 1, y: 0, rotate: 0 } : { rotate: 0 }}
                 transition={{ delay: 0.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               >
                 <LaptopMockup>
@@ -861,6 +896,7 @@ export function GatheringBrandedApp({
             </motion.div>
           </div>
         </div>
+      </motion.div>
     </div>
   );
 }
