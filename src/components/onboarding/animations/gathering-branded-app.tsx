@@ -718,7 +718,7 @@ export function GatheringBrandedApp({
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
       if (width === 0 || height === 0) return;
-      const s = Math.min(width / MOCKUP_W, height / MOCKUP_H, 1200 / MOCKUP_W, 800 / MOCKUP_H) * 0.7;
+      const s = Math.min(width / MOCKUP_W, height / MOCKUP_H) * 0.85;
       setMockupScale(Math.max(0.4, s));
     });
     ro.observe(node);
@@ -735,7 +735,7 @@ export function GatheringBrandedApp({
       >
         {/* Left sidebar */}
         <motion.div
-          className="w-72 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
+          className="w-80 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
           initial={{ opacity: 0, x: -40 }}
           animate={isActive ? { opacity: 1, x: 0 } : {}}
           transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -782,35 +782,26 @@ export function GatheringBrandedApp({
           </div>
         </motion.div>
 
-        {/* Right side — header + mockups + input */}
-        <div ref={mockupAreaRef} className="flex-1 flex items-center justify-center px-6 py-6 min-w-0">
-          <div className="flex flex-col items-center">
-            {/* Centered header */}
-            <motion.div
-              className="text-center mb-6"
-              initial={{ opacity: 0, y: 16 }}
-              animate={isActive ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 0.2, duration: 0.5 }}
+        {/* Right side — mockups with overlay button */}
+        <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-6 pt-12">
+          <motion.h3
+            className="text-3xl font-semibold text-gray-900 font-serif mb-12 shrink-0"
+            initial={{ opacity: 0, y: 16 }}
+            animate={isActive ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          >
+            Your branded app is ready
+          </motion.h3>
+          <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
+            <div
+              className="relative"
+              style={{
+                width: MOCKUP_W,
+                height: MOCKUP_H,
+                transform: `scale(${mockupScale})`,
+                transformOrigin: 'top left',
+              }}
             >
-              <h3 className="text-2xl font-semibold text-gray-900 font-serif mb-1">
-                Your branded app is ready
-              </h3>
-              <p className="text-sm text-gray-400">
-                {businessName} — powered by All Gravy
-              </p>
-            </motion.div>
-
-            {/* Mockup — sized to scaled dimensions */}
-            <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
-              <div
-                className="relative"
-                style={{
-                  width: MOCKUP_W,
-                  height: MOCKUP_H,
-                  transform: `scale(${mockupScale})`,
-                  transformOrigin: 'top left',
-                }}
-              >
               {/* App icon */}
               <motion.div
                 className="absolute z-10"
@@ -822,10 +813,9 @@ export function GatheringBrandedApp({
                 <div
                   className="flex items-center justify-center overflow-hidden"
                   style={{
-                    width: 88,
-                    height: 88,
-                    borderRadius: 24,
-                    border: '2px solid rgba(255,255,255,0.2)',
+                    width: 64,
+                    height: 64,
+                    borderRadius: 14,
                     backgroundColor: primaryColor,
                     boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
                   }}
@@ -872,29 +862,23 @@ export function GatheringBrandedApp({
                   </div>
                 </PhoneMockup>
               </motion.div>
-              </div>
             </div>
-
-            {/* Email + CTA underneath */}
-            <motion.div
-              className="flex items-center gap-2 w-full max-w-md mt-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={isActive ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 1.3, duration: 0.4 }}
-            >
-              <OnboardingInput
-                type="email"
-                placeholder="Enter your work email"
-                icon={<Mail className="size-4" />}
-                className="!h-11 !rounded-xl !text-sm flex-1"
-              />
-              <button
-                className="h-11 px-6 rounded-xl text-sm font-medium text-white shrink-0 bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_1px_3px_rgba(98,92,228,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
-              >
-                Get started
-              </button>
-            </motion.div>
           </div>
+
+          {/* Gradient overlay with header + button */}
+          <motion.div
+            className="absolute bottom-0 left-0 right-0 z-20 flex items-end justify-center pb-8"
+            style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)', height: 200 }}
+            initial={{ opacity: 0 }}
+            animate={isActive ? { opacity: 1 } : {}}
+            transition={{ delay: 1.2, duration: 0.5 }}
+          >
+            <button
+              className="h-12 px-20 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_2px_8px_rgba(98,92,228,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
+            >
+              Get started
+            </button>
+          </motion.div>
         </div>
       </motion.div>
     </div>
