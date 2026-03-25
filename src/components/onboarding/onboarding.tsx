@@ -392,17 +392,14 @@ function OnboardingInner() {
   );
 
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
-    // Phase 2: Scrape remaining chain locations (primary already started on business confirm)
-    const primaryId = selectedPlace?.placeId;
-    const remainingLocs = primaryId
-      ? confirmedLocs.filter((l) => l.id !== primaryId)
-      : confirmedLocs;
-
-    if (remainingLocs.length > 0) {
-      startReviewsFetch(remainingLocs.map((l) => l.id));
-      startReviewAnalysisFetch(remainingLocs);
+    // Scrape all confirmed chain locations (full mode, no lite)
+    // Primary location analysis already running from "Get Started", but the
+    // full analysis across all locations will supersede it via SET_REVIEW_ANALYSIS
+    if (confirmedLocs.length > 0) {
+      startReviewsFetch(confirmedLocs.map((l) => l.id));
+      startReviewAnalysisFetch(confirmedLocs);
     }
-  }, [selectedPlace, startReviewsFetch, startReviewAnalysisFetch]);
+  }, [startReviewsFetch, startReviewAnalysisFetch]);
 
   const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
     dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });

@@ -256,11 +256,9 @@ export function StepGathering({
     }
   }, [autoAdvance, advancePhase]);
 
-  // Analysis sub-phase complete → advance to branded-app
+  // Analysis sub-phase complete → user must manually advance to branded-app via Next button
   const handleAnalysisComplete = useCallback(() => {
-    if (autoAdvance) {
-      advancePhase();
-    }
+    // Disabled auto-advance: let user read the analysis results
   }, [autoAdvance, advancePhase]);
 
   const renderAnimation = () => {
