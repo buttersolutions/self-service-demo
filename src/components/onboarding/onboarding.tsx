@@ -97,7 +97,7 @@ function OnboardingInner() {
   }, [dispatch]);
 
   const startReviewsFetch = useCallback((placeIds: string[]) => {
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Outscraper Reviews' } });
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Apify Reviews' } });
     fetch('/api/reviews', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -108,8 +108,8 @@ function OnboardingInner() {
         return res.json();
       })
       .then((data) => {
-        const outscraperReviews: ReviewItem[] = data.reviews ?? [];
-        dispatch({ type: 'MERGE_REVIEWS', payload: outscraperReviews });
+        const apifyReviews: ReviewItem[] = data.reviews ?? [];
+        dispatch({ type: 'MERGE_REVIEWS', payload: apifyReviews });
         dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'done' } });
       })
       .catch((err: unknown) => {
@@ -399,7 +399,7 @@ function OnboardingInner() {
     // full analysis across all locations will supersede it via SET_REVIEW_ANALYSIS
     if (confirmedLocs.length > 0) {
       startReviewsFetch(confirmedLocs.map((l) => l.id));
-      startReviewAnalysisFetch(confirmedLocs, false); // full mode — all locations, 3 Outscraper calls each
+      startReviewAnalysisFetch(confirmedLocs, false); // full mode — all locations, 3 Apify calls (batched)
     }
   }, [startReviewsFetch, startReviewAnalysisFetch]);
 

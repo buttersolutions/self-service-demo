@@ -20,7 +20,8 @@
       "mcp__claude_ai_Granola__get_meeting_transcript",
       "WebFetch(domain:apify.com)",
       "WebSearch",
-      "WebFetch(domain:allgravy.com)"
+      "WebFetch(domain:allgravy.com)",
+      "WebFetch(domain:docs.apify.com)"
     ]
   }
 }

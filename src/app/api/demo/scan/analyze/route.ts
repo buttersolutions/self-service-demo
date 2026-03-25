@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { fetchOutscraperReviews } from "@/lib/outscraper";
+import { fetchApifyReviews, mapSort, type ApifyReview } from "@/lib/apify-reviews";
 import { getPlaceDetails } from "@/lib/google-places";
 import type { PlaceSummary, ReviewAnalysis, ReviewInsight, CategoryBreakdown } from "@/lib/types";
 
@@ -198,7 +198,7 @@ async function runMerge(insights: ReviewInsight[]): Promise<{
   return { headline: "", body: "", strengths: [], opportunities: [], categoryBreakdown: [] };
 }
 
-// The 3 Outscraper calls we fire per location, independently
+// Apify review fetch configs — one call per sort order, all placeIds batched
 const REVIEW_FETCHES_FULL: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
   { limit: 50, sort: "newest" },
   { limit: 25, sort: "lowest_rating" },
@@ -264,151 +264,127 @@ export async function POST(request: Request) {
         let preliminaryMergePromise: Promise<void> | null = null;
         let batchCounter = 0;
 
-        const processLocation = async (loc: PlaceSummary) => {
-          const seen = new Set<string>();
-          let locationReviewCount = 0;
-          let locationBatchIndex = 0;
+        // Build placeId → location lookup
+        const locMap = new Map(locations.map((loc) => [loc.placeId, loc]));
+        const allPlaceIds = locations.map((loc) => loc.placeId);
+        const seen = new Set<string>();
 
-          const analyzeWave = async (reviews: ReviewForAnalysis[], sort: string) => {
-            if (!reviews.length) return;
-            const batches = chunkArray(reviews, batchSize);
-            await Promise.all(
-              batches.map(async (batch) => {
-                const idx = locationBatchIndex++;
-                const globalIdx = batchCounter++;
-                const batchStart = ts();
-                const result = await analyzeBatch(batch);
-                emit("timing", {
-                  id: `haiku_batch_${globalIdx}`,
-                  label: `Haiku batch #${globalIdx}`,
-                  startMs: batchStart,
-                  endMs: ts(),
-                  detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights (${sort})`,
-                  parent: `outscraper_${loc.placeId}_${sort}`,
+        // Fire all sort-order fetches in parallel — each batches ALL placeIds
+        await Promise.all(
+          reviewFetches.map(async ({ limit, sort }) => {
+            const fetchStart = ts();
+            try {
+              const apifySort = mapSort(sort);
+              const reviews = await fetchApifyReviews(allPlaceIds, limit, apifySort);
+
+              const fetchEnd = ts();
+              emit("timing", {
+                id: `apify_${sort}`,
+                label: `Apify ${sort}`,
+                startMs: fetchStart,
+                endMs: fetchEnd,
+                detail: `${reviews.length} reviews across ${allPlaceIds.length} places`,
+              });
+
+              // Group reviews by placeId, dedupe, and convert
+              const byPlace = new Map<string, ReviewForAnalysis[]>();
+              for (const r of reviews) {
+                const key = `${r.reviewerId}|${r.publishedAtDate}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+
+                const loc = locMap.get(r.placeId);
+                const locationName = loc?.displayName ?? r.name ?? "Unknown";
+
+                const existing = byPlace.get(r.placeId) ?? [];
+                existing.push({
+                  author: r.reviewerName,
+                  rating: r.stars,
+                  text: r.text,
+                  date: r.publishedAtDate,
+                  locationName,
                 });
+                byPlace.set(r.placeId, existing);
+              }
 
-                if (result && result.insights.length > 0) {
-                  allInsights.push(...result.insights);
-                  totalPositive += result.positiveCount;
-                  totalNegative += result.negativeCount;
-                  totalReviews += result.totalReviewsAnalyzed;
-
-                  emit("batch_analysis", {
-                    placeId: loc.placeId,
-                    displayName: loc.displayName,
-                    batchIndex: idx,
-                    insights: result.insights,
-                  });
-
-                  // Fire preliminary merge as soon as we have first insights (skip in lite)
-                  if (!lite && !preliminaryMergeFired && allInsights.length > 0) {
-                    preliminaryMergeFired = true;
-                    const snapshot = [...allInsights];
-                    const prelimStart = ts();
-                    preliminaryMergePromise = runMerge(snapshot).then((merged) => {
-                      emit("timing", {
-                        id: "preliminary_merge",
-                        label: "Preliminary merge (Haiku)",
-                        startMs: prelimStart,
-                        endMs: ts(),
-                        detail: `${snapshot.length} insights`,
-                      });
-                      const prelimAnalysis: ReviewAnalysis = {
-                        ...merged,
-                        insights: snapshot,
-                        totalReviewsAnalyzed: totalReviews,
-                        positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
-                        negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
-                      };
-                      emit("preliminary_analysis", prelimAnalysis);
-                    }).catch(() => {});
-                  }
-                }
-              })
-            );
-          };
-
-          // Fire Outscraper calls concurrently, process each as it lands
-          await Promise.all(
-            reviewFetches.map(async ({ limit, sort }) => {
-              const fetchStart = ts();
-              try {
-                const place = await Promise.race([
-                  fetchOutscraperReviews(loc.placeId, limit, sort),
-                  new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Outscraper timeout (60s)')), 60000)),
-                ]);
-
-                const rawCount = place?.reviews_data?.length ?? 0;
-
-                // Dedupe against reviews we already have from other sort orders
-                const newReviews: ReviewForAnalysis[] = [];
-                for (const r of place?.reviews_data ?? []) {
-                  if (!r.review_text) continue;
-                  const key = `${r.autor_id}|${r.review_timestamp}`;
-                  if (!seen.has(key)) {
-                    seen.add(key);
-                    newReviews.push({
-                      author: r.autor_name,
-                      rating: r.review_rating,
-                      text: r.review_text,
-                      date: r.review_datetime_utc,
-                      locationName: loc.displayName,
-                    });
-                  }
-                }
-
-                const fetchEnd = ts();
-                emit("timing", {
-                  id: `outscraper_${loc.placeId}_${sort}`,
-                  label: `Outscraper ${sort}`,
-                  startMs: fetchStart,
-                  endMs: fetchEnd,
-                  detail: `${rawCount} raw → ${newReviews.length} new (limit ${limit})`,
-                  parent: `location_${loc.placeId}`,
-                });
-
-                locationReviewCount += newReviews.length;
-
+              // Emit progress per location and analyze
+              for (const [placeId, locReviews] of byPlace) {
+                const loc = locMap.get(placeId);
                 emit("reviews_progress", {
-                  placeId: loc.placeId,
-                  displayName: loc.displayName,
-                  reviewCount: locationReviewCount,
+                  placeId,
+                  displayName: loc?.displayName ?? placeId,
+                  reviewCount: locReviews.length,
                   sort,
                 });
 
-                // Immediately analyze this wave
-                await analyzeWave(newReviews, sort);
-              } catch (err) {
-                emit("timing", {
-                  id: `outscraper_${loc.placeId}_${sort}`,
-                  label: `Outscraper ${sort}`,
-                  startMs: fetchStart,
-                  endMs: ts(),
-                  detail: `FAILED: ${err instanceof Error ? err.message : String(err)}`,
-                  parent: `location_${loc.placeId}`,
-                  error: true,
-                });
+                // Analyze in batches
+                const batches = chunkArray(locReviews, batchSize);
+                await Promise.all(
+                  batches.map(async (batch) => {
+                    const globalIdx = batchCounter++;
+                    const batchStart = ts();
+                    const result = await analyzeBatch(batch);
+                    emit("timing", {
+                      id: `haiku_batch_${globalIdx}`,
+                      label: `Haiku batch #${globalIdx}`,
+                      startMs: batchStart,
+                      endMs: ts(),
+                      detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights (${sort})`,
+                      parent: `apify_${sort}`,
+                    });
+
+                    if (result && result.insights.length > 0) {
+                      allInsights.push(...result.insights);
+                      totalPositive += result.positiveCount;
+                      totalNegative += result.negativeCount;
+                      totalReviews += result.totalReviewsAnalyzed;
+
+                      emit("batch_analysis", {
+                        placeId,
+                        displayName: loc?.displayName ?? placeId,
+                        batchIndex: globalIdx,
+                        insights: result.insights,
+                      });
+
+                      // Fire preliminary merge on first insights (skip in lite)
+                      if (!lite && !preliminaryMergeFired && allInsights.length > 0) {
+                        preliminaryMergeFired = true;
+                        const snapshot = [...allInsights];
+                        const prelimStart = ts();
+                        preliminaryMergePromise = runMerge(snapshot).then((merged) => {
+                          emit("timing", {
+                            id: "preliminary_merge",
+                            label: "Preliminary merge (Haiku)",
+                            startMs: prelimStart,
+                            endMs: ts(),
+                            detail: `${snapshot.length} insights`,
+                          });
+                          const prelimAnalysis: ReviewAnalysis = {
+                            ...merged,
+                            insights: snapshot,
+                            totalReviewsAnalyzed: totalReviews,
+                            positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
+                            negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
+                          };
+                          emit("preliminary_analysis", prelimAnalysis);
+                        }).catch(() => {});
+                      }
+                    }
+                  })
+                );
               }
-            })
-          );
-
-          emit("timing", {
-            id: `location_${loc.placeId}`,
-            label: `Location: ${loc.displayName}`,
-            startMs: 0, // will be set by first child
-            endMs: ts(),
-            detail: `${locationReviewCount} reviews, ${locationBatchIndex} batches`,
-          });
-        };
-
-        // In lite mode run all locations concurrently, otherwise batch by 5
-        if (lite) {
-          await Promise.all(locations.map(processLocation));
-        } else {
-          for (let i = 0; i < locations.length; i += 5) {
-            await Promise.all(locations.slice(i, i + 5).map(processLocation));
-          }
-        }
+            } catch (err) {
+              emit("timing", {
+                id: `apify_${sort}`,
+                label: `Apify ${sort}`,
+                startMs: fetchStart,
+                endMs: ts(),
+                detail: `FAILED: ${err instanceof Error ? err.message : String(err)}`,
+                error: true,
+              });
+            }
+          })
+        );
 
         emit("reviews_complete", { totalReviews });
 
