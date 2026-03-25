@@ -236,7 +236,7 @@ export async function POST(request: Request) {
 
       try {
         const reviewFetches = lite ? REVIEW_FETCHES_LITE : REVIEW_FETCHES_FULL;
-        const batchSize = lite ? 20 : 5;
+        const batchSize = 20; // larger batches = fewer Haiku calls = faster
 
         // Start place details fetch immediately in parallel (skip in lite mode)
         let detailsPromise: Promise<(Awaited<ReturnType<typeof getPlaceDetails>> | null)[]> | null = null;
@@ -260,16 +260,15 @@ export async function POST(request: Request) {
         let totalPositive = 0;
         let totalNegative = 0;
         let totalReviews = 0;
-        let preliminaryMergeFired = false;
-        let preliminaryMergePromise: Promise<void> | null = null;
         let batchCounter = 0;
 
         // Build placeId → location lookup
         const locMap = new Map(locations.map((loc) => [loc.placeId, loc]));
         const allPlaceIds = locations.map((loc) => loc.placeId);
         const seen = new Set<string>();
+        const allReviewsForAnalysis: ReviewForAnalysis[] = [];
 
-        // Fire all sort-order fetches in parallel — each batches ALL placeIds
+        // PHASE 1: Collect all reviews from Apify (parallel sort-order fetches)
         await Promise.all(
           reviewFetches.map(async ({ limit, sort }) => {
             const fetchStart = ts();
@@ -277,17 +276,16 @@ export async function POST(request: Request) {
               const apifySort = mapSort(sort);
               const reviews = await fetchApifyReviews(allPlaceIds, limit, apifySort);
 
-              const fetchEnd = ts();
               emit("timing", {
                 id: `apify_${sort}`,
                 label: `Apify ${sort}`,
                 startMs: fetchStart,
-                endMs: fetchEnd,
+                endMs: ts(),
                 detail: `${reviews.length} reviews across ${allPlaceIds.length} places`,
               });
 
-              // Group reviews by placeId, dedupe, and convert
-              const byPlace = new Map<string, ReviewForAnalysis[]>();
+              // Dedupe and collect
+              const countByPlace = new Map<string, number>();
               for (const r of reviews) {
                 const key = `${r.reviewerId}|${r.publishedAtDate}`;
                 if (seen.has(key)) continue;
@@ -296,82 +294,26 @@ export async function POST(request: Request) {
                 const loc = locMap.get(r.placeId);
                 const locationName = loc?.displayName ?? r.name ?? "Unknown";
 
-                const existing = byPlace.get(r.placeId) ?? [];
-                existing.push({
+                allReviewsForAnalysis.push({
                   author: r.reviewerName,
                   rating: r.stars,
                   text: r.text,
                   date: r.publishedAtDate,
                   locationName,
                 });
-                byPlace.set(r.placeId, existing);
+
+                countByPlace.set(r.placeId, (countByPlace.get(r.placeId) ?? 0) + 1);
               }
 
-              // Emit progress per location and analyze
-              for (const [placeId, locReviews] of byPlace) {
+              // Emit progress per location
+              for (const [placeId, count] of countByPlace) {
                 const loc = locMap.get(placeId);
                 emit("reviews_progress", {
                   placeId,
                   displayName: loc?.displayName ?? placeId,
-                  reviewCount: locReviews.length,
+                  reviewCount: count,
                   sort,
                 });
-
-                // Analyze in batches
-                const batches = chunkArray(locReviews, batchSize);
-                await Promise.all(
-                  batches.map(async (batch) => {
-                    const globalIdx = batchCounter++;
-                    const batchStart = ts();
-                    const result = await analyzeBatch(batch);
-                    emit("timing", {
-                      id: `haiku_batch_${globalIdx}`,
-                      label: `Haiku batch #${globalIdx}`,
-                      startMs: batchStart,
-                      endMs: ts(),
-                      detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights (${sort})`,
-                      parent: `apify_${sort}`,
-                    });
-
-                    if (result && result.insights.length > 0) {
-                      allInsights.push(...result.insights);
-                      totalPositive += result.positiveCount;
-                      totalNegative += result.negativeCount;
-                      totalReviews += result.totalReviewsAnalyzed;
-
-                      emit("batch_analysis", {
-                        placeId,
-                        displayName: loc?.displayName ?? placeId,
-                        batchIndex: globalIdx,
-                        insights: result.insights,
-                      });
-
-                      // Fire preliminary merge on first insights (skip in lite)
-                      if (!lite && !preliminaryMergeFired && allInsights.length > 0) {
-                        preliminaryMergeFired = true;
-                        const snapshot = [...allInsights];
-                        const prelimStart = ts();
-                        preliminaryMergePromise = runMerge(snapshot).then((merged) => {
-                          emit("timing", {
-                            id: "preliminary_merge",
-                            label: "Preliminary merge (Haiku)",
-                            startMs: prelimStart,
-                            endMs: ts(),
-                            detail: `${snapshot.length} insights`,
-                          });
-                          const prelimAnalysis: ReviewAnalysis = {
-                            ...merged,
-                            insights: snapshot,
-                            totalReviewsAnalyzed: totalReviews,
-                            positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
-                            negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
-                          };
-                          emit("preliminary_analysis", prelimAnalysis);
-                        }).catch(() => {});
-                      }
-                    }
-                  })
-                );
               }
             } catch (err) {
               emit("timing", {
@@ -386,10 +328,38 @@ export async function POST(request: Request) {
           })
         );
 
-        emit("reviews_complete", { totalReviews });
+        emit("reviews_complete", { totalReviews: allReviewsForAnalysis.length });
 
-        // Wait for preliminary merge to finish before final merge
-        if (preliminaryMergePromise) await preliminaryMergePromise;
+        // PHASE 2: Analyze ALL reviews in parallel Haiku batches (fire all at once)
+        const analysisBatches = chunkArray(allReviewsForAnalysis, batchSize);
+        await Promise.all(
+          analysisBatches.map(async (batch) => {
+            const globalIdx = batchCounter++;
+            const batchStart = ts();
+            const result = await analyzeBatch(batch);
+            emit("timing", {
+              id: `haiku_batch_${globalIdx}`,
+              label: `Haiku batch #${globalIdx}`,
+              startMs: batchStart,
+              endMs: ts(),
+              detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights`,
+            });
+
+            if (result && result.insights.length > 0) {
+              allInsights.push(...result.insights);
+              totalPositive += result.positiveCount;
+              totalNegative += result.negativeCount;
+              totalReviews += result.totalReviewsAnalyzed;
+
+              emit("batch_analysis", {
+                placeId: batch[0]?.locationName ?? "",
+                displayName: batch[0]?.locationName ?? "",
+                batchIndex: globalIdx,
+                insights: result.insights,
+              });
+            }
+          })
+        );
 
         // Final merge with ALL insights
         let reviewAnalysis: ReviewAnalysis | null = null;

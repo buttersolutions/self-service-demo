@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { TypewriterSearch } from '../ui/typewriter-search';
 import { GatheringSidebar, type SidebarStep } from '../animations/gathering-sidebar';
 import { GatheringMap } from '../animations/gathering-map';
-import { GatheringReviews } from '../animations/gathering-reviews';
+// GatheringReviews removed — analysis component handles the full phase
 import { GatheringStaffAnalysis } from '../animations/gathering-staff-analysis';
 import { GatheringPhotos } from '../animations/gathering-photos';
 import { GatheringBrandedApp } from '../animations/gathering-branded-app';
@@ -106,12 +106,9 @@ export function StepGathering({
   const [completedPhaseIds, setCompletedPhaseIds] = useState<Set<string>>(new Set());
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [photosAllShown, setPhotosAllShown] = useState(false);
-  // Sub-phase for reviews-analysis: 'reviews' shows review cards, 'analysis' shows the analysis
-  const [reviewsSubPhase, setReviewsSubPhase] = useState<'reviews' | 'analysis'>('reviews');
   const phaseStartRef = useRef(Date.now());
   const completedRef = useRef(false);
   const prevPhaseRef = useRef(0);
-  const reviewsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentPhase = PHASES[currentPhaseIndex];
   const businessName = business?.name ?? '';
@@ -123,10 +120,6 @@ export function StepGathering({
     if (PHASES[currentPhaseIndex]?.id !== 'photos') {
       setPhotosAllShown(false);
     }
-    // Reset sub-phase when entering reviews-analysis
-    if (PHASES[currentPhaseIndex]?.id === 'reviews-analysis') {
-      setReviewsSubPhase('reviews');
-    }
   }, [currentPhaseIndex]);
 
   // Mark branded-app (last phase) as completed immediately when we land on it
@@ -135,31 +128,6 @@ export function StepGathering({
       setCompletedPhaseIds((prev) => new Set([...prev, 'branded-app']));
     }
   }, [currentPhaseIndex]);
-
-  // Auto-transition from reviews sub-phase to analysis sub-phase after 8s
-  useEffect(() => {
-    if (currentPhase.id !== 'reviews-analysis' || reviewsSubPhase !== 'reviews') return;
-    if (!autoAdvance) return;
-
-    reviewsTimerRef.current = setTimeout(() => {
-      setReviewsSubPhase('analysis');
-    }, 8000);
-
-    return () => {
-      if (reviewsTimerRef.current) clearTimeout(reviewsTimerRef.current);
-    };
-  }, [currentPhase.id, reviewsSubPhase, autoAdvance]);
-
-  // If analysis data arrives early and we've been in reviews for at least 5s, switch to analysis
-  useEffect(() => {
-    if (currentPhase.id !== 'reviews-analysis' || reviewsSubPhase !== 'reviews') return;
-    if (!gatheringData.reviewAnalysis) return;
-
-    const elapsed = Date.now() - phaseStartRef.current;
-    if (elapsed >= 5000) {
-      setReviewsSubPhase('analysis');
-    }
-  }, [currentPhase.id, reviewsSubPhase, gatheringData.reviewAnalysis]);
 
   const advancePhase = useCallback(() => {
     setCompletedPhaseIds((prev) => new Set([...prev, PHASES[currentPhaseIndex].id]));
@@ -266,15 +234,6 @@ export function StepGathering({
       case 'locations':
         return <GatheringMap locations={locations} isActive />;
       case 'reviews-analysis':
-        // Combined phase: show reviews first, then analysis
-        if (reviewsSubPhase === 'reviews') {
-          return (
-            <GatheringReviews
-              reviews={gatheringData.reviews}
-              isActive
-            />
-          );
-        }
         return (
           <GatheringStaffAnalysis
             mentions={gatheringData.reviewInsights}
@@ -311,10 +270,7 @@ export function StepGathering({
     }
   };
 
-  // Determine search text — during reviews sub-phase show collecting text
-  const searchText = currentPhase.id === 'reviews-analysis' && reviewsSubPhase === 'reviews'
-    ? `Collecting ${businessName} reviews...`
-    : currentPhase.searchText(businessName);
+  const searchText = currentPhase.searchText(businessName);
 
   return (
     <motion.div
@@ -341,13 +297,13 @@ export function StepGathering({
       <div className="w-full h-full relative overflow-hidden">
         {(currentPhase.id === 'locations' || currentPhase.id === 'reviews-analysis' || currentPhase.id === 'photos') && (
           <div className="absolute top-4 z-30 w-full max-w-md px-6" style={{ left: 'calc(50% + 140px)', transform: 'translateX(-50%)' }}>
-            <TypewriterSearch key={`${currentPhase.id}-${reviewsSubPhase}`} text={searchText} />
+            <TypewriterSearch key={currentPhase.id} text={searchText} />
           </div>
         )}
 
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
-            key={`${currentPhase.id}-${currentPhase.id === 'reviews-analysis' ? reviewsSubPhase : ''}`}
+            key={currentPhase.id}
             className="h-full"
             style={currentPhase.id !== 'locations' && currentPhase.id !== 'branded-app' ? { paddingLeft: 280 } : undefined}
             custom={direction}
@@ -362,9 +318,9 @@ export function StepGathering({
         </AnimatePresence>
 
         {/* Scan line — on map and reviews collection */}
-        {(currentPhase.id === 'locations' || (currentPhase.id === 'reviews-analysis' && reviewsSubPhase === 'reviews')) && (
+        {currentPhase.id === 'locations' && (
           <motion.div
-            key={`scan-${currentPhase.id}-${reviewsSubPhase}`}
+            key={`scan-${currentPhase.id}`}
             className="absolute left-0 right-0 h-[2px] z-20 pointer-events-none"
             style={{
               background:
