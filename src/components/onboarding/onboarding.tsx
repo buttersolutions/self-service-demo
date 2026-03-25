@@ -266,36 +266,50 @@ function OnboardingInner() {
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
 
     try {
-      const [chainResult, brandResult] = await Promise.all([
-        fetch('/api/places/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: buildChainQuery(place),
-            ...(domain && { websiteDomain: domain }),
-          }),
-        })
-          .then((res) => res.json() as Promise<TextSearchResponse>)
-          .then((data) => { dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } }); return data; }),
-
-        domain
-          ? fetch('/api/brand', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ domain }),
+      // Fire brand fetch in background (don't block navigation)
+      const brandPromise = domain
+        ? fetch('/api/brand', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } });
+              dispatch({
+                type: 'SET_BUSINESS',
+                payload: {
+                  name: data.name ?? place.displayName,
+                  logoUrl: data.logoUrl ?? null,
+                  domain: domain ?? '',
+                  brandColors: data.colors ?? ['#FFFFFF'],
+                  fonts: data.fonts ?? [],
+                  ogImage: data.ogImage ?? null,
+                  websiteImages: data.websiteImages ?? [],
+                },
+              });
             })
-              .then((res) => res.json())
-              .then((data) => { dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } }); return data; })
-          : Promise.resolve({ name: null, logoUrl: null, colors: ['#FFFFFF'] }),
-      ]);
+            .catch(() => {
+              dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'error' } });
+            })
+        : null;
 
-      const brandName = brandResult.name ?? place.displayName;
+      // Await chain discovery only — it's faster
+      const chainResult = await fetch('/api/places/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: buildChainQuery(place),
+          ...(domain && { websiteDomain: domain }),
+        }),
+      }).then((res) => res.json() as Promise<TextSearchResponse>);
+      dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } });
 
       const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
         const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
         const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
         const locationLabel = streetName
-          ? `${brandName} - ${streetName}`
+          ? `${place.displayName} - ${streetName}`
           : p.displayName;
 
         return {
@@ -310,13 +324,10 @@ function OnboardingInner() {
         };
       });
 
-      // Domain-based filtering is primary (handled by searchPlaces brandFilter).
-      // Only apply country filtering as fallback when no domain was available.
       const filteredLocations = domain
         ? chainLocations
         : chainLocations.filter(loc => !place.countryCode || loc.countryCode === place.countryCode);
 
-      // Sort by country — selected country first, then alphabetically by country code
       const selectedCountry = place.countryCode;
       filteredLocations.sort((a, b) => {
         if (a.countryCode === selectedCountry && b.countryCode !== selectedCountry) return -1;
@@ -327,19 +338,20 @@ function OnboardingInner() {
       dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
       domainRef.current = domain;
 
-      dispatch({
-        type: 'SET_BUSINESS',
-        payload: {
-          name: brandName,
-          logoUrl: brandResult.logoUrl ?? null,
-          domain: domain ?? '',
-          brandColors: brandResult.colors ?? ['#FFFFFF'],
-          fonts: brandResult.fonts ?? [],
-          ogImage: brandResult.ogImage ?? null,
-          websiteImages: brandResult.websiteImages ?? [],
-        },
-      });
+      // Set initial business with place name (brand fetch will update when ready)
+      if (!brandPromise) {
+        dispatch({
+          type: 'SET_BUSINESS',
+          payload: {
+            name: place.displayName,
+            logoUrl: null,
+            domain: domain ?? '',
+            brandColors: ['#FFFFFF'],
+          },
+        });
+      }
 
+      // Fire place details in background
       const detailPlaceIds = [
         place.placeId,
         ...filteredLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
@@ -353,7 +365,6 @@ function OnboardingInner() {
         .then((res) => res.json() as Promise<PlaceDetailsResponse>)
         .then((data) => {
           const allDetails = data.details ?? [];
-
           const allReviews = allDetails.flatMap((d) =>
             (d.reviews ?? []).map((r) => ({
               author: r.authorName,
@@ -365,7 +376,6 @@ function OnboardingInner() {
           if (allReviews.length > 0) {
             dispatch({ type: 'MERGE_REVIEWS', payload: allReviews });
           }
-
           const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
           if (allPhotos.length > 0) {
             dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
@@ -374,7 +384,7 @@ function OnboardingInner() {
         .catch(() => {});
 
       dispatch({ type: 'SET_LOADING', payload: false });
-      goForward('confirm-business');
+      goForward('confirm-locations'); // Locations first (chain data ready), business second (brand still loading)
     } catch {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -392,24 +402,22 @@ function OnboardingInner() {
       const domain = domainRef.current ?? data.website;
       startBackgroundFetch(domain);
 
-      goForward('confirm-locations');
+      goForward('gathering'); // Business → Gathering
     },
     [business, startBackgroundFetch, dispatch],
   );
 
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
     // Scrape all confirmed chain locations (full mode, no lite)
-    // Primary location analysis already running from "Get Started", but the
-    // full analysis across all locations will supersede it via SET_REVIEW_ANALYSIS
     if (confirmedLocs.length > 0) {
       startReviewsFetch(confirmedLocs.map((l) => l.id));
-      startReviewAnalysisFetch(confirmedLocs, false); // full mode — all locations, 3 Apify calls (batched)
+      startReviewAnalysisFetch(confirmedLocs, false);
     }
   }, [startReviewsFetch, startReviewAnalysisFetch]);
 
   const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
     dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
-    goForward('gathering');
+    goForward('confirm-business'); // Locations → Business (brand data loading in background)
   }, [dispatch]);
 
   const handleGatheringComplete = useCallback(() => {
@@ -417,9 +425,9 @@ function OnboardingInner() {
   }, []);
 
   const handleBack = useCallback(() => {
-    if (step === 'confirm-locations') {
-      goBack('confirm-business');
-    } else if (step === 'confirm-business') {
+    if (step === 'confirm-business') {
+      goBack('confirm-locations');
+    } else if (step === 'confirm-locations') {
       goBack('search');
       dispatch({ type: 'SET_LOADING', payload: false });
     }
