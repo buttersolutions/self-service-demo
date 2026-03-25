@@ -118,6 +118,10 @@ function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdow
     .filter((i) => i.category === breakdown.category && i.sentiment === 'negative')
     .slice(0, 2);
 
+  const countDisplay = breakdown.count >= 10
+    ? `${breakdown.count} reviews`
+    : `${Math.round(breakdown.percentage)}%`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -129,14 +133,14 @@ function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdow
         <div className="flex items-center gap-2">
           <AlertTriangle className="size-4 text-amber-500" />
           <span className="text-sm font-semibold text-gray-900 capitalize">
-            {breakdown.category.replace('-', ' ')}
+            {breakdown.category.replace(/-/g, ' ')}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#625CE4]/10 text-[#625CE4]">
             {breakdown.allgravyModule}
           </span>
-          <span className="text-lg font-bold text-gray-900">{Math.round(breakdown.percentage)}%</span>
+          <span className="text-lg font-bold text-gray-900">{countDisplay}</span>
         </div>
       </div>
 
@@ -173,8 +177,6 @@ function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdow
 export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, reviews, progress, isActive, onComplete }: GatheringStaffAnalysisProps) {
   const [phase, setPhase] = useState<'loading' | 'results'>('loading');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollingRef = useRef(false);
-  const rafRef = useRef<number | null>(null);
   const completeCalledRef = useRef(false);
   const [resultsRevealed, setResultsRevealed] = useState(false);
 
@@ -212,68 +214,19 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
   const previewStrengths = analysisPreview?.strengths ?? [];
   const previewOpportunities = analysisPreview?.opportunities ?? [];
 
-  // Transition from loading to results — but hold the loading screen
-  // for at least 15 seconds so users can read the progress cards and previews
-  const mountedAtRef = useRef(Date.now());
+  // Stay on loading screen until the FINAL analysis arrives — no timer.
+  // The loading screen IS the experience while the pipeline runs.
   useEffect(() => {
     if (!isActive || !isDataReady || phase !== 'loading') return;
-    const elapsed = Date.now() - mountedAtRef.current;
-    const remaining = Math.max(0, 15000 - elapsed);
-    const timer = setTimeout(() => setPhase('results'), remaining);
-    return () => clearTimeout(timer);
+    setPhase('results');
   }, [isActive, isDataReady, phase]);
 
-  // Reveal results with a delay, then fire onComplete
+  // Reveal results with a short delay
   useEffect(() => {
     if (phase !== 'results') return;
     const timer = setTimeout(() => setResultsRevealed(true), 300);
     return () => clearTimeout(timer);
   }, [phase]);
-
-  // Fire onComplete after results have been shown for a while
-  useEffect(() => {
-    if (!resultsRevealed || completeCalledRef.current) return;
-
-    const timer = setTimeout(() => {
-      if (!completeCalledRef.current) {
-        completeCalledRef.current = true;
-        onComplete?.();
-      }
-    }, 8000);
-
-    return () => clearTimeout(timer);
-  }, [resultsRevealed, onComplete]);
-
-  // Start slow auto-scroll once results are revealed
-  useEffect(() => {
-    if (!resultsRevealed) return;
-
-    const timer = setTimeout(() => {
-      if (scrollingRef.current || !scrollRef.current) return;
-      scrollingRef.current = true;
-
-      const scroll = () => {
-        if (!scrollingRef.current || !scrollRef.current) return;
-        const s = scrollRef.current;
-        if (s.scrollTop + s.clientHeight < s.scrollHeight - 2) {
-          s.scrollTop += 0.8;
-        }
-        rafRef.current = requestAnimationFrame(scroll);
-      };
-
-      rafRef.current = requestAnimationFrame(scroll);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [resultsRevealed]);
-
-  // Clean up auto-scroll
-  useEffect(() => {
-    return () => {
-      scrollingRef.current = false;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
 
   const isEmpty = isDataReady && mentions.length === 0 && !analysis.headline;
 

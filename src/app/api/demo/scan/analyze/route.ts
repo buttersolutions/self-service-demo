@@ -292,7 +292,7 @@ const REVIEW_FETCHES_FULL: { limit: number; sort: "newest" | "lowest_rating" | "
 ];
 
 const REVIEW_FETCHES_LITE: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
-  { limit: 30, sort: "newest" },
+  { limit: 200, sort: "newest" },
 ];
 
 // ── Main handler ────────────────────────────────────────────────────
@@ -346,6 +346,7 @@ export async function POST(request: Request) {
         let totalNegative = 0;
         let totalReviews = 0;
         let mergeVersion = 0;
+        let batchCounter = 0;
 
         const locMap = new Map(locations.map((loc) => [loc.placeId, loc]));
         const allPlaceIds = locations.map((loc) => loc.placeId);
@@ -426,20 +427,49 @@ export async function POST(request: Request) {
           detail: `${allReviewsForAnalysis.length} reviews → ${bucketSummary}`,
         });
 
-        // ── PHASE 3: Category-focused Haiku classification (all parallel) + incremental Sonnet merges ──
-        // Fire all category batches at once. After each completes, trigger a Sonnet merge update.
+        // ── PHASE 3: Category-focused Haiku classification (all parallel) ──
+        // Haiku batches run freely. Sonnet merges fire on a 5s interval, decoupled.
         const categoryPromises: Promise<void>[] = [];
+        let lastMergedCount = 0;
+
+        // Incremental Sonnet merges on a 5s interval (decoupled from Haiku)
+        const mergeInterval = setInterval(async () => {
+          if (allInsights.length > lastMergedCount) {
+            const version = ++mergeVersion;
+            const snapshot = [...allInsights];
+            lastMergedCount = snapshot.length;
+            const mergeStart = ts();
+            try {
+              const merged = await runMerge(snapshot);
+              emit("timing", {
+                id: `merge_v${version}`,
+                label: `Sonnet merge v${version}`,
+                startMs: mergeStart,
+                endMs: ts(),
+                detail: `${snapshot.length} insights`,
+              });
+              emit("analysis_update", {
+                ...merged,
+                insights: snapshot,
+                totalReviewsAnalyzed: totalReviews,
+                positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
+                negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
+              });
+            } catch {
+              // Will retry on next interval
+            }
+          }
+        }, 5000);
 
         for (const cat of CATEGORIES) {
           const catReviews = buckets.get(cat)!;
           if (catReviews.length === 0) continue;
 
-          // Chunk into batches of 10 for this category
           const batches = chunkArray(catReviews, 10);
           for (const batch of batches) {
             categoryPromises.push(
               (async () => {
-                const batchIdx = totalReviews;
+                const batchIdx = batchCounter++;
                 const batchStart = ts();
                 const result = await analyzeCategoryBatch(cat, batch);
 
@@ -463,40 +493,15 @@ export async function POST(request: Request) {
                     batchIndex: batchIdx,
                     insights: result.insights,
                   });
-
-                  // Incremental Sonnet merge — feeds the loading screen with progressive previews
-                  const version = ++mergeVersion;
-                  const snapshot = [...allInsights];
-                  const mergeStart = ts();
-                  try {
-                    const merged = await runMerge(snapshot);
-                    emit("timing", {
-                      id: `merge_v${version}`,
-                      label: `Sonnet merge v${version}`,
-                      startMs: mergeStart,
-                      endMs: ts(),
-                      detail: `${snapshot.length} insights`,
-                    });
-
-                    // analysis_update = incremental preview (loading screen)
-                    // analysis = final (triggers results view)
-                    emit("analysis_update", {
-                      ...merged,
-                      insights: snapshot,
-                      totalReviewsAnalyzed: totalReviews,
-                      positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
-                      negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
-                    });
-                  } catch {
-                    // Merge failed, will try again on next batch
-                  }
                 }
               })()
             );
           }
         }
 
+        // Wait for all Haiku batches to complete (Sonnet merges run independently)
         await Promise.all(categoryPromises);
+        clearInterval(mergeInterval);
 
         // ── Final merge if we have insights but no merge happened yet ──
         if (allInsights.length > 0) {
