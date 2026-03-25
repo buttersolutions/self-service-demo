@@ -212,10 +212,14 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
   const previewStrengths = analysisPreview?.strengths ?? [];
   const previewOpportunities = analysisPreview?.opportunities ?? [];
 
-  // Transition from loading to results when data arrives
+  // Transition from loading to results — but hold the loading screen
+  // for at least 15 seconds so users can read the progress cards and previews
+  const mountedAtRef = useRef(Date.now());
   useEffect(() => {
     if (!isActive || !isDataReady || phase !== 'loading') return;
-    const timer = setTimeout(() => setPhase('results'), 800);
+    const elapsed = Date.now() - mountedAtRef.current;
+    const remaining = Math.max(0, 15000 - elapsed);
+    const timer = setTimeout(() => setPhase('results'), remaining);
     return () => clearTimeout(timer);
   }, [isActive, isDataReady, phase]);
 
