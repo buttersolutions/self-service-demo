@@ -20,36 +20,57 @@ interface ReviewForAnalysis {
 }
 
 const CATEGORY_MODULE_MAP: Record<string, string> = {
-  "internal-comms": "Chat & Newsfeed",
-  "learning-development": "Learning & Development",
-  "compliance-training": "Compliance & Safety",
-  "operations": "To-Do's & Handbooks",
-  "onboarding": "Onboarding",
-  "people-management": "People & HRIS",
+  "service-attitude": "Chat & Newsfeed",
+  "speed-efficiency": "To-Do's & Handbooks",
+  "training-knowledge": "Learning & Development",
+  "consistency": "Learning & Development",
+  "dietary-safety": "Compliance & Safety",
+  "staffing": "People & HRIS",
 };
 
-const PER_LOCATION_PROMPT = `Analyze these customer reviews to find insights that map to internal operational systems. You are looking for signals that indicate whether the business needs better:
+const PER_LOCATION_PROMPT = `You are analyzing customer reviews for a hospitality business. Extract insights that reveal how well the team operates — things that internal systems can fix.
 
-1. **Internal Communications** (category: "internal-comms", module: "Chat & Newsfeed") — staff miscommunication, orders wrong, information not passed between shifts, front-of-house/back-of-house disconnect
-2. **Learning & Development** (category: "learning-development", module: "Learning & Development") — untrained staff, inconsistent service, knowledge gaps, staff not knowing menu/products, new hire struggles
-3. **Compliance & Safety Training** (category: "compliance-training", module: "Compliance & Safety") — hygiene issues, safety concerns, food handling, allergen mistakes, regulatory issues
-4. **Operations & Task Management** (category: "operations", module: "To-Do's & Handbooks") — slow service, things forgotten, inconsistent standards across locations, process breakdowns, missing items
-5. **Onboarding** (category: "onboarding", module: "Onboarding") — clearly new/inexperienced staff, staff unsure of procedures, first-day mistakes
-6. **People Management** (category: "people-management", module: "People & HRIS") — understaffing, high turnover signals, overworked staff, management issues, team morale
+CATEGORIES (only use these):
 
-Include BOTH positive (well-run operations, great teamwork, well-trained staff) and negative reviews. Skip reviews purely about food taste, decor, or prices with no operational angle.
+1. **Service & Hospitality** (category: "service-attitude", module: "Chat & Newsfeed")
+   Positive signals: "friendly staff", "welcoming", "attentive", staff named and praised, "made us feel special", "looked after us"
+   Negative signals: "ignored us", "rude", "no one came to our table", "staff walked past", "felt forgotten", "unhelpful"
+
+2. **Speed & Efficiency** (category: "speed-efficiency", module: "To-Do's & Handbooks")
+   Positive: "food came quickly", "fast service", "served promptly", "didn't wait long"
+   Negative: "slow service", "waited ages", "took forever", "had to ask multiple times", "long wait"
+
+3. **Training & Knowledge** (category: "training-knowledge", module: "Learning & Development")
+   Positive: "staff knew the menu well", "great recommendations", "explained everything"
+   Negative: "didn't know ingredients", "couldn't answer questions", "seemed new/unsure", "got our order wrong"
+
+4. **Consistency Across Locations** (category: "consistency", module: "Learning & Development")
+   Signals: "this branch was different", "not as good as the other location", "quality varies", "inconsistent"
+
+5. **Dietary & Allergen Handling** (category: "dietary-safety", module: "Compliance & Safety")
+   Positive: "clearly labelled", "accommodated allergies", "great vegan options handled well"
+   Negative: "couldn't confirm allergens", "wrong dish for dietary requirement", "cross-contamination concern"
+
+6. **Staffing & Team** (category: "staffing", module: "People & HRIS")
+   Signals: "understaffed", "overworked", "only one person serving", "clearly short-staffed", "high turnover feel"
+
+RULES:
+- Include BOTH positive and negative reviews
+- SKIP reviews that are ONLY about food taste, decor, pricing, or portion size with zero operational angle
+- Be selective — only extract reviews that clearly map to one of the 6 categories
+- The "relevantExcerpt" must be a direct quote from the review, not your summary
 
 Return valid JSON:
 {
   "insights": [
     {
       "reviewAuthor": string,
-      "reviewText": string (full text),
+      "reviewText": string (full review text),
       "reviewRating": number (1-5),
       "reviewDate": string,
       "sentiment": "positive" | "negative",
-      "category": "internal-comms" | "learning-development" | "compliance-training" | "operations" | "onboarding" | "people-management",
-      "relevantExcerpt": string (the specific sentence about the operational issue),
+      "category": "service-attitude" | "speed-efficiency" | "training-knowledge" | "consistency" | "dietary-safety" | "staffing",
+      "relevantExcerpt": string (exact quote from the review),
       "locationName": string,
       "allgravyModule": string
     }
@@ -62,22 +83,22 @@ Return valid JSON:
 Reviews:
 `;
 
-const MERGE_PROMPT = `You have review analysis from multiple locations of the same business. Create a unified summary.
+const MERGE_PROMPT = `You have operational insights extracted from customer reviews across multiple locations. Create a summary that frames findings as opportunities for an internal team platform.
 
-The categories map to Allgravy's internal systems platform:
-- "internal-comms" → Chat & Newsfeed (team communication)
-- "learning-development" → Learning & Development (LMS, training courses)
-- "compliance-training" → Compliance & Safety (compliance tracking, safety training)
-- "operations" → To-Do's & Handbooks (task management, SOPs)
-- "onboarding" → Onboarding (new hire programs)
-- "people-management" → People & HRIS (staffing, retention)
+Categories map to platform modules:
+- "service-attitude" → Chat & Newsfeed (internal team communication)
+- "speed-efficiency" → To-Do's & Handbooks (task management, SOPs, checklists)
+- "training-knowledge" → Learning & Development (training courses, knowledge base)
+- "consistency" → Learning & Development (standardized training across locations)
+- "dietary-safety" → Compliance & Safety (allergen training, food safety)
+- "staffing" → People & HRIS (scheduling, retention, team management)
 
 Rules:
-- headline: Max 12 words. Lead with what's working well, hint at what could improve. Punchy and specific to this business.
-- body: 2-3 sentences. First acknowledge strengths, then frame problems as opportunities that Allgravy's platform solves. Be specific about which modules help.
-- strengths: Top 2-3 things customers love about service/operations (short phrases, not full sentences)
-- opportunities: Top 2-3 problem areas phrased as what the Allgravy module would fix (e.g. "Shift handover communication via Chat & Newsfeed", "Service consistency via Learning & Development")
-- categoryBreakdown: For each category found, calculate percentage of total insights and dominant sentiment.
+- headline: Max 12 words. Specific to this business. Highlight the strongest positive AND the biggest opportunity.
+- body: 2-3 sentences. Acknowledge what's working, then frame the top 1-2 problems as solvable with the right internal tools. No jargon.
+- strengths: Top 2-3 things customers consistently praise about the team/operations (short phrases)
+- opportunities: Top 2-3 actionable improvements tied to a platform module (e.g. "Service speed via task checklists", "Allergen confidence via compliance training")
+- categoryBreakdown: For each category found, calculate percentage of total insights and whether it's mostly positive, negative, or mixed.
 
 Return valid JSON:
 {
@@ -119,7 +140,7 @@ async function analyzeBatch(
     .join("\n\n");
 
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: "claude-sonnet-4-5-20250929",
     max_tokens: 2048,
     messages: [{ role: "user", content: PER_LOCATION_PROMPT + reviewsText }],
   });
@@ -166,7 +187,7 @@ async function runMerge(insights: ReviewInsight[]): Promise<{
     .join("\n");
 
   const mergeMessage = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
     messages: [{ role: "user", content: MERGE_PROMPT + summaryText }],
   });

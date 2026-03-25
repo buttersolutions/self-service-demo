@@ -38,7 +38,7 @@ export interface PlaceDetails extends PlaceSummary {
 
 // --- Review analysis types ---
 
-export type InsightCategory = 'internal-comms' | 'learning-development' | 'compliance-training' | 'operations' | 'onboarding' | 'people-management';
+export type InsightCategory = 'service-attitude' | 'speed-efficiency' | 'training-knowledge' | 'consistency' | 'dietary-safety' | 'staffing';
 
 export interface ReviewInsight {
   reviewAuthor: string;
