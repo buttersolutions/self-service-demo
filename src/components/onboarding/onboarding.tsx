@@ -169,10 +169,11 @@ function OnboardingInner() {
         };
       });
 
-      const selectedCountry = place.countryCode;
-      const filteredLocations = selectedCountry
-        ? chainLocations.filter(loc => loc.countryCode === selectedCountry)
-        : chainLocations;
+      // Domain-based filtering is primary (handled by searchPlaces brandFilter).
+      // Only apply country filtering as fallback when no domain was available.
+      const filteredLocations = domain
+        ? chainLocations
+        : chainLocations.filter(loc => !place.countryCode || loc.countryCode === place.countryCode);
 
       dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
       domainRef.current = domain;
@@ -192,7 +193,7 @@ function OnboardingInner() {
 
       const detailPlaceIds = [
         place.placeId,
-        ...chainLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
+        ...filteredLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
       ].slice(0, 10);
 
       fetch('/api/places/details', {
