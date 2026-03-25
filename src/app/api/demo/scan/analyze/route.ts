@@ -191,7 +191,8 @@ async function analyzeBatch(
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
-    messages: [{ role: "user", content: PER_LOCATION_PROMPT + reviewsText }],
+    system: [{ type: "text", text: PER_LOCATION_PROMPT, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: reviewsText }],
   });
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
@@ -238,7 +239,8 @@ async function runMerge(insights: ReviewInsight[]): Promise<{
   const mergeMessage = await anthropic.messages.create({
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
-    messages: [{ role: "user", content: MERGE_PROMPT + summaryText }],
+    system: [{ type: "text", text: MERGE_PROMPT, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: summaryText }],
   });
 
   const mergeText =
