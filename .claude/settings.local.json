@@ -15,7 +15,9 @@
       "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/TextAnimations\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
       "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/Backgrounds\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
       "Bash(curl -s \"https://api.github.com/repos/DavidHDev/react-bits/contents/src/content/Components\" | python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\" 2>/dev/null)",
-      "Bash(node -e \"console.log\\(Math.max\\(0, Infinity - 1000\\)\\); console.log\\(setTimeout\\(\\(\\) => console.log\\('fired'\\), Infinity\\)\\)\")"
+      "Bash(node -e \"console.log\\(Math.max\\(0, Infinity - 1000\\)\\); console.log\\(setTimeout\\(\\(\\) => console.log\\('fired'\\), Infinity\\)\\)\")",
+      "WebFetch(domain:notes.granola.ai)",
+      "mcp__claude_ai_Granola__get_meeting_transcript"
     ]
   }
 }

@@ -282,6 +282,7 @@ export function StepGathering({
             mentions={gatheringData.reviewInsights}
             analysis={gatheringData.reviewAnalysis}
             reviews={gatheringData.reviews}
+            progress={gatheringData.reviewProgress}
             isActive
             onComplete={handleAnalysisComplete}
           />

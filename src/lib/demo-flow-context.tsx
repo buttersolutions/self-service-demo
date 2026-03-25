@@ -11,10 +11,12 @@ import {
 import type { PlaceSummary, ReviewInsight, ReviewAnalysis } from "./types";
 import type {
   BusinessData,
+  FeedPost,
   FetchTiming,
   GatheringData,
   LocationItem,
   ReviewItem,
+  ReviewProgressEvent,
   Step,
 } from "@/components/onboarding/types";
 import { deriveBrandColorMap, type BrandColorMap } from "./colors";
@@ -38,6 +40,8 @@ const initialGatheringData: GatheringData = {
   photos: [],
   reviewInsights: [],
   reviewAnalysis: null,
+  reviewProgress: [],
+  feedPosts: null,
 };
 
 const initialState: OnboardingState = {
@@ -63,6 +67,8 @@ export type OnboardingAction =
   | { type: "MERGE_REVIEWS"; payload: ReviewItem[] }
   | { type: "APPEND_REVIEW_INSIGHTS"; payload: ReviewInsight[] }
   | { type: "SET_REVIEW_ANALYSIS"; payload: ReviewAnalysis }
+  | { type: "APPEND_REVIEW_PROGRESS"; payload: ReviewProgressEvent }
+  | { type: "SET_FEED_POSTS"; payload: FeedPost[] }
   | { type: "TRACK_FETCH_START"; payload: { key: string; label: string } }
   | { type: "TRACK_FETCH_END"; payload: { key: string; status: "done" | "error"; errorMessage?: string } }
   | { type: "TRACK_SSE_EVENT"; payload: { key: string; event: string } }
@@ -117,6 +123,22 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
           ...state.gatheringData,
           reviewAnalysis: action.payload,
           reviewInsights: action.payload.insights,
+        },
+      };
+    case "APPEND_REVIEW_PROGRESS":
+      return {
+        ...state,
+        gatheringData: {
+          ...state.gatheringData,
+          reviewProgress: [...state.gatheringData.reviewProgress, action.payload],
+        },
+      };
+    case "SET_FEED_POSTS":
+      return {
+        ...state,
+        gatheringData: {
+          ...state.gatheringData,
+          feedPosts: action.payload,
         },
       };
     case "TRACK_FETCH_START": {

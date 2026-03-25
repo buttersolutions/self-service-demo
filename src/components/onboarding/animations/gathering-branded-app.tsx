@@ -12,7 +12,7 @@ import {
 import { OnboardingButton, OnboardingInput } from '../ui';
 import { useOnboarding } from '@/lib/demo-flow-context';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
-import type { LocationItem } from '../types';
+import type { FeedPost, LocationItem } from '../types';
 import type { PlacePhoto, ReviewAnalysis } from '@/lib/types';
 
 interface GatheringBrandedAppProps {
@@ -25,12 +25,69 @@ interface GatheringBrandedAppProps {
 
 const AVATAR_COLORS = ['#625CE4', '#E45C7A', '#5CAE60', '#D4A03E', '#5C8DE4', '#E4835C'];
 
-const PEOPLE = [
+type Person = { name: string; initials: string; color: string };
+
+const PEOPLE_BY_COUNTRY: Record<string, Person[]> = {
+  dk: [
+    { name: 'Sofie Nielsen', initials: 'SN', color: AVATAR_COLORS[0] },
+    { name: 'Mikkel Hansen', initials: 'MH', color: AVATAR_COLORS[1] },
+    { name: 'Ida Christensen', initials: 'IC', color: AVATAR_COLORS[2] },
+    { name: 'Frederik Larsen', initials: 'FL', color: AVATAR_COLORS[3] },
+  ],
+  de: [
+    { name: 'Lena Müller', initials: 'LM', color: AVATAR_COLORS[0] },
+    { name: 'Max Weber', initials: 'MW', color: AVATAR_COLORS[1] },
+    { name: 'Anna Schmidt', initials: 'AS', color: AVATAR_COLORS[2] },
+    { name: 'Jonas Fischer', initials: 'JF', color: AVATAR_COLORS[3] },
+  ],
+  se: [
+    { name: 'Elin Svensson', initials: 'ES', color: AVATAR_COLORS[0] },
+    { name: 'Oscar Lindberg', initials: 'OL', color: AVATAR_COLORS[1] },
+    { name: 'Maja Eriksson', initials: 'ME', color: AVATAR_COLORS[2] },
+    { name: 'Axel Johansson', initials: 'AJ', color: AVATAR_COLORS[3] },
+  ],
+  no: [
+    { name: 'Nora Berg', initials: 'NB', color: AVATAR_COLORS[0] },
+    { name: 'Lars Haugen', initials: 'LH', color: AVATAR_COLORS[1] },
+    { name: 'Ingrid Dahl', initials: 'ID', color: AVATAR_COLORS[2] },
+    { name: 'Erik Olsen', initials: 'EO', color: AVATAR_COLORS[3] },
+  ],
+  nl: [
+    { name: 'Sophie de Vries', initials: 'SV', color: AVATAR_COLORS[0] },
+    { name: 'Bram Bakker', initials: 'BB', color: AVATAR_COLORS[1] },
+    { name: 'Fleur Jansen', initials: 'FJ', color: AVATAR_COLORS[2] },
+    { name: 'Daan Visser', initials: 'DV', color: AVATAR_COLORS[3] },
+  ],
+  es: [
+    { name: 'Lucía García', initials: 'LG', color: AVATAR_COLORS[0] },
+    { name: 'Carlos Martín', initials: 'CM', color: AVATAR_COLORS[1] },
+    { name: 'María López', initials: 'ML', color: AVATAR_COLORS[2] },
+    { name: 'Pablo Ruiz', initials: 'PR', color: AVATAR_COLORS[3] },
+  ],
+  fr: [
+    { name: 'Camille Dupont', initials: 'CD', color: AVATAR_COLORS[0] },
+    { name: 'Lucas Bernard', initials: 'LB', color: AVATAR_COLORS[1] },
+    { name: 'Léa Martin', initials: 'LM', color: AVATAR_COLORS[2] },
+    { name: 'Hugo Petit', initials: 'HP', color: AVATAR_COLORS[3] },
+  ],
+  it: [
+    { name: 'Giulia Rossi', initials: 'GR', color: AVATAR_COLORS[0] },
+    { name: 'Marco Bianchi', initials: 'MB', color: AVATAR_COLORS[1] },
+    { name: 'Sara Colombo', initials: 'SC', color: AVATAR_COLORS[2] },
+    { name: 'Luca Ferrari', initials: 'LF', color: AVATAR_COLORS[3] },
+  ],
+};
+
+const DEFAULT_PEOPLE: Person[] = [
   { name: 'Sarah Mitchell', initials: 'SM', color: AVATAR_COLORS[0] },
   { name: 'James Chen', initials: 'JC', color: AVATAR_COLORS[1] },
   { name: 'Emma Rodriguez', initials: 'ER', color: AVATAR_COLORS[2] },
   { name: 'Alex Thompson', initials: 'AT', color: AVATAR_COLORS[3] },
 ];
+
+function getPeople(countryCode?: string): Person[] {
+  return PEOPLE_BY_COUNTRY[countryCode ?? ''] ?? DEFAULT_PEOPLE;
+}
 
 function AvatarCircle({ initials, color, size = 36 }: { initials: string; color: string; size?: number }) {
   return (
@@ -52,7 +109,7 @@ const DEFAULT_CHANNELS = [
 ];
 
 function buildFeedChannels(locations: LocationItem[]) {
-  const locationChannels = locations.slice(0, 4).map((loc) => {
+  const locationChannels = locations.map((loc) => {
     const shortName = loc.name.split(' - ').pop()?.trim() ?? loc.name;
     return { name: shortName, emoji: '📍' };
   });
@@ -81,6 +138,8 @@ function FeedReplica({
   locations,
   analysis,
   websiteImages,
+  people,
+  feedPosts,
   animate,
 }: {
   businessName: string;
@@ -90,6 +149,8 @@ function FeedReplica({
   locations: LocationItem[];
   analysis: ReviewAnalysis | null;
   websiteImages: string[];
+  people: Person[];
+  feedPosts: FeedPost[] | null;
   animate: boolean;
 }) {
   const feedChannels = buildFeedChannels(locations);
@@ -100,16 +161,19 @@ function FeedReplica({
   const photo2 = fcImg2 ?? (photos[3] ? `/api/places/photo?name=${encodeURIComponent(photos[3].name)}&maxWidthPx=600` : undefined);
   const heroPhoto = photos[1] ? `/api/places/photo?name=${encodeURIComponent(photos[1].name)}&maxWidthPx=1200` : undefined;
 
-  // Dynamic post content from analysis
-  const post1Text = analysis?.strengths?.[0]
-    ? `Great news! Customers consistently highlight "${analysis.strengths[0]}" across our locations. Keep up the amazing work, team! 🎉`
-    : `Welcome to the ${businessName} team! We're excited to have everyone on board. 🎉`;
-  const post1Channel = analysis?.strengths?.[0] ? 'Team Shoutouts' : 'Announcements';
+  // Use Haiku-generated posts if available, fall back to analysis-derived, then generic
+  const desktopPosts = feedPosts?.filter((p) => p.platform === 'desktop') ?? [];
+  const post1Text = desktopPosts[0]?.body
+    ?? (analysis?.strengths?.[0]
+      ? `Great news! Customers consistently highlight "${analysis.strengths[0]}" across our locations. Keep up the amazing work, team!`
+      : `Welcome to the ${businessName} team! We're excited to have everyone on board.`);
+  const post1Channel = desktopPosts[0]?.channel ?? (analysis?.strengths?.[0] ? 'Team Shoutouts' : 'Announcements');
 
-  const post2Text = analysis?.opportunities?.[0]
-    ? `New training available: ${analysis.opportunities[0]}. This was identified as a key growth area from recent customer feedback. Check it out in Grow! 📚`
-    : `Quick snap from yesterday's team lunch! Great to see everyone together 🍕`;
-  const post2Channel = analysis?.opportunities?.[0] ? 'Announcements' : 'Office Life';
+  const post2Text = desktopPosts[1]?.body
+    ?? (analysis?.opportunities?.[0]
+      ? `New training available: ${analysis.opportunities[0]}. This was identified as a key growth area from recent customer feedback. Check it out in Grow!`
+      : `Quick snap from yesterday's team lunch! Great to see everyone together`);
+  const post2Channel = desktopPosts[1]?.channel ?? (analysis?.opportunities?.[0] ? 'Announcements' : 'Office Life');
 
   return (
     <div className="w-[1200px] h-[750px] bg-white flex flex-col" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -173,7 +237,7 @@ function FeedReplica({
           <div className="size-8 rounded-full bg-[#f0f0f0] flex items-center justify-center">
             <Settings className="size-[16px] text-[#4b5563]" strokeWidth={2.5} />
           </div>
-          <AvatarCircle initials={PEOPLE[0].initials} color={PEOPLE[0].color} size={36} />
+          <AvatarCircle initials={people[0].initials} color={people[0].color} size={36} />
         </div>
       </motion.nav>
 
@@ -237,9 +301,9 @@ function FeedReplica({
               animate={animate ? fadeUp.visible : fadeUp.initial}
               transition={stagger(0.3, 3)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3">
-                <AvatarCircle initials={PEOPLE[0].initials} color={PEOPLE[0].color} />
+                <AvatarCircle initials={people[0].initials} color={people[0].color} />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900">{PEOPLE[0].name}</div>
+                  <div className="text-sm font-medium text-gray-900">{people[0].name}</div>
                   <div className="text-xs text-gray-400 mb-2">General</div>
                   <div className="text-sm text-gray-400 h-5">Write something here...</div>
                 </div>
@@ -249,9 +313,9 @@ function FeedReplica({
             {/* Post 1: with image */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 4)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <AvatarCircle initials={PEOPLE[1].initials} color={PEOPLE[1].color} />
+                <AvatarCircle initials={people[1].initials} color={people[1].color} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-900">{PEOPLE[1].name}</div>
+                  <div className="text-sm font-semibold text-gray-900">{people[1].name}</div>
                   <div className="text-xs text-gray-400">
                     11:28 in <span className="text-gray-400">{post1Channel}</span>
                   </div>
@@ -283,8 +347,8 @@ function FeedReplica({
                     <span className="text-xs">❤️ 1</span>
                   </button>
                   <div className="flex items-center -space-x-1.5 ml-1">
-                    <AvatarCircle initials={PEOPLE[2].initials} color={PEOPLE[2].color} size={20} />
-                    <AvatarCircle initials={PEOPLE[3].initials} color={PEOPLE[3].color} size={20} />
+                    <AvatarCircle initials={people[2].initials} color={people[2].color} size={20} />
+                    <AvatarCircle initials={people[3].initials} color={people[3].color} size={20} />
                   </div>
                   <button className="px-3 py-[6px] rounded-full border border-gray-200 bg-gray-50 text-xs font-medium text-gray-900">
                     5 comments
@@ -304,9 +368,9 @@ function FeedReplica({
             {/* Post 2: text only */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 5)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <AvatarCircle initials={PEOPLE[2].initials} color={PEOPLE[2].color} />
+                <AvatarCircle initials={people[2].initials} color={people[2].color} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-900">{PEOPLE[2].name}</div>
+                  <div className="text-sm font-semibold text-gray-900">{people[2].name}</div>
                   <div className="text-xs text-gray-400">
                     09:15 in <span className="text-gray-400">{post2Channel}</span>
                   </div>
@@ -361,8 +425,8 @@ function FeedReplica({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <AvatarCircle initials={PEOPLE[2].initials} color={PEOPLE[2].color} size={16} />
-                        <span className="text-sm font-semibold text-gray-900 truncate">{PEOPLE[2].name}</span>
+                        <AvatarCircle initials={people[2].initials} color={people[2].color} size={16} />
+                        <span className="text-sm font-semibold text-gray-900 truncate">{people[2].name}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">🌴 Vacation · 5 days</p>
                     </div>
@@ -488,6 +552,8 @@ function MobileFeedReplica({
   photos,
   analysis,
   websiteImages,
+  people,
+  feedPosts,
   animate,
 }: {
   businessName: string;
@@ -497,8 +563,17 @@ function MobileFeedReplica({
   photos: PlacePhoto[];
   analysis: ReviewAnalysis | null;
   websiteImages: string[];
+  people: Person[];
+  feedPosts: FeedPost[] | null;
   animate: boolean;
 }) {
+  // Use Haiku-generated posts for mobile
+  const mobilePosts = feedPosts?.filter((p) => p.platform === 'mobile') ?? [];
+  const mobilePostText = mobilePosts[0]?.body
+    ?? (analysis?.strengths?.[0]
+      ? `Customers love "${analysis.strengths[0]}" across our locations. Keep it up!`
+      : `Welcome to the ${businessName} team! We're excited to have everyone on board`);
+
   // Prefer firecrawl website images for stories, fall back to Google photos, then unsplash
   const storyPhoto1 = websiteImages[0] ?? (photos[2] ? `/api/places/photo?name=${encodeURIComponent(photos[2].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop');
   const storyPhoto2 = websiteImages[1] ?? (photos[4] ? `/api/places/photo?name=${encodeURIComponent(photos[4].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&h=400&fit=crop');
@@ -553,7 +628,7 @@ function MobileFeedReplica({
         <div className="shrink-0 flex flex-col items-center gap-1">
           <div className="relative">
             <div className="size-[72px] rounded-full overflow-hidden border-[3px] border-[#FA614C] p-[2px]">
-              <AvatarCircle initials={PEOPLE[0].initials} color={PEOPLE[0].color} size={40} />
+              <AvatarCircle initials={people[0].initials} color={people[0].color} size={40} />
             </div>
             <div className="absolute -top-1 -right-1 size-[20px] rounded-full bg-[#FA614C] flex items-center justify-center border-2 border-white">
               <span className="text-[9px] font-bold text-white">2</span>
@@ -607,17 +682,15 @@ function MobileFeedReplica({
       <motion.div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 3)}>
         <div className="px-4 pt-4 pb-1">
           <div className="flex items-start gap-3 mb-2">
-            <AvatarCircle initials={PEOPLE[1].initials} color={PEOPLE[1].color} size={44} />
+            <AvatarCircle initials={people[1].initials} color={people[1].color} size={44} />
             <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-bold text-[#1A2027]">{PEOPLE[1].name}</div>
+              <div className="text-[15px] font-bold text-[#1A2027]">{people[1].name}</div>
               <div className="text-[12px] text-[#7E7E7E]">09:03 in Announcements</div>
             </div>
             <MoreVertical className="size-5 text-[#C0C0C0] shrink-0 mt-1" />
           </div>
           <p className="text-[14px] text-[#1A2027] leading-relaxed mb-3">
-            {analysis?.strengths?.[0]
-              ? `Great news! Customers love "${analysis.strengths[0]}" across our locations. Keep it up! 🎉🚀`
-              : `Welcome to the ${businessName} team! We're excited to have everyone on board 🎉🚀`}
+            {mobilePostText}
           </p>
           {postPhoto && (
             <div className="w-full h-44 rounded-xl overflow-hidden">
@@ -775,7 +848,10 @@ export function GatheringBrandedApp({
   const primaryColor = brandColorMap.primaryColor;
   const darkestBrandColor = primaryColor;
   const analysis = state.gatheringData.reviewAnalysis;
+  const feedPosts = state.gatheringData.feedPosts;
   const websiteImages = state.business?.websiteImages ?? [];
+  const countryCode = state.selectedPlace?.countryCode ?? state.locations[0]?.countryCode;
+  const people = getPeople(countryCode);
   const checklistItems = buildChecklist(analysis, locations.length);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -916,7 +992,7 @@ export function GatheringBrandedApp({
               >
                 <LaptopMockup>
                   <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} locations={locations} analysis={analysis} websiteImages={websiteImages} animate={isActive} />
+                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} locations={locations} analysis={analysis} websiteImages={websiteImages} people={people} feedPosts={feedPosts} animate={isActive} />
                   </div>
                 </LaptopMockup>
               </motion.div>
@@ -938,6 +1014,8 @@ export function GatheringBrandedApp({
                       photos={photos}
                       analysis={analysis}
                       websiteImages={websiteImages}
+                      people={people}
+                      feedPosts={feedPosts}
                       animate={isActive}
                     />
                   </div>

@@ -41,6 +41,19 @@ export interface ReviewItem {
   date: string;
 }
 
+export interface ReviewProgressEvent {
+  placeId: string;
+  displayName: string;
+  reviewCount: number;
+  sort: string;
+}
+
+export interface FeedPost {
+  body: string;
+  channel: string;
+  platform: 'desktop' | 'mobile';
+}
+
 export interface GatheringData {
   reviews: ReviewItem[] | null;
   company: WaterfallCompany | null;
@@ -48,4 +61,6 @@ export interface GatheringData {
   photos: PlacePhoto[];
   reviewInsights: ReviewInsight[];
   reviewAnalysis: ReviewAnalysis | null;
+  reviewProgress: ReviewProgressEvent[];
+  feedPosts: FeedPost[] | null;
 }
