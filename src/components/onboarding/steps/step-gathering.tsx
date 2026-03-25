@@ -238,6 +238,7 @@ export function StepGathering({
           <GatheringStaffAnalysis
             mentions={gatheringData.reviewInsights}
             analysis={gatheringData.reviewAnalysis}
+            analysisPreview={gatheringData.reviewAnalysisPreview}
             reviews={gatheringData.reviews}
             progress={gatheringData.reviewProgress}
             isActive

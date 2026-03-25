@@ -61,6 +61,7 @@ export interface GatheringData {
   photos: PlacePhoto[];
   reviewInsights: ReviewInsight[];
   reviewAnalysis: ReviewAnalysis | null;
+  reviewAnalysisPreview: ReviewAnalysis | null;
   reviewProgress: ReviewProgressEvent[];
   feedPosts: FeedPost[] | null;
 }

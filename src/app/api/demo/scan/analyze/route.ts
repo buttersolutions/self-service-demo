@@ -464,8 +464,7 @@ export async function POST(request: Request) {
                     insights: result.insights,
                   });
 
-                  // Incremental Sonnet merge — fire after each batch that produces insights
-                  // This gives the UI progressive updates
+                  // Incremental Sonnet merge — feeds the loading screen with progressive previews
                   const version = ++mergeVersion;
                   const snapshot = [...allInsights];
                   const mergeStart = ts();
@@ -479,14 +478,15 @@ export async function POST(request: Request) {
                       detail: `${snapshot.length} insights`,
                     });
 
-                    const analysis: ReviewAnalysis = {
+                    // analysis_update = incremental preview (loading screen)
+                    // analysis = final (triggers results view)
+                    emit("analysis_update", {
                       ...merged,
                       insights: snapshot,
                       totalReviewsAnalyzed: totalReviews,
                       positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
                       negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
-                    };
-                    emit("analysis", analysis);
+                    });
                   } catch {
                     // Merge failed, will try again on next batch
                   }

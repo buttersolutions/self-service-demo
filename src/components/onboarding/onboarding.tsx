@@ -177,6 +177,10 @@ function OnboardingInner() {
                   insightCount += insights.length;
                   dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
                   dispatch({ type: 'APPEND_REVIEW_INSIGHTS', payload: insights });
+                } else if (eventName === 'analysis_update') {
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis_update: preview (${data.insights?.length ?? 0} insights)` } });
+                  // Preview only — feeds the loading screen, doesn't trigger results view
+                  dispatch({ type: 'SET_REVIEW_ANALYSIS_PREVIEW', payload: data as ReviewAnalysis });
                 } else if (eventName === 'analysis') {
                   dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis: final (${data.insights?.length ?? 0} insights)` } });
                   const analysisData = data as ReviewAnalysis;

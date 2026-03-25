@@ -40,6 +40,7 @@ const initialGatheringData: GatheringData = {
   photos: [],
   reviewInsights: [],
   reviewAnalysis: null,
+  reviewAnalysisPreview: null,
   reviewProgress: [],
   feedPosts: null,
 };
@@ -67,6 +68,7 @@ export type OnboardingAction =
   | { type: "MERGE_REVIEWS"; payload: ReviewItem[] }
   | { type: "APPEND_REVIEW_INSIGHTS"; payload: ReviewInsight[] }
   | { type: "SET_REVIEW_ANALYSIS"; payload: ReviewAnalysis }
+  | { type: "SET_REVIEW_ANALYSIS_PREVIEW"; payload: ReviewAnalysis }
   | { type: "APPEND_REVIEW_PROGRESS"; payload: ReviewProgressEvent }
   | { type: "SET_FEED_POSTS"; payload: FeedPost[] }
   | { type: "TRACK_FETCH_START"; payload: { key: string; label: string } }
@@ -123,6 +125,14 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
           ...state.gatheringData,
           reviewAnalysis: action.payload,
           reviewInsights: action.payload.insights,
+        },
+      };
+    case "SET_REVIEW_ANALYSIS_PREVIEW":
+      return {
+        ...state,
+        gatheringData: {
+          ...state.gatheringData,
+          reviewAnalysisPreview: action.payload,
         },
       };
     case "APPEND_REVIEW_PROGRESS":

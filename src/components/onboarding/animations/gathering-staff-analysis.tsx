@@ -10,6 +10,7 @@ import { SquaresBackground } from './squares-background';
 interface GatheringStaffAnalysisProps {
   mentions: ReviewInsight[];
   analysis: ReviewAnalysis | null;
+  analysisPreview: ReviewAnalysis | null;
   reviews: ReviewItem[] | null;
   progress: ReviewProgressEvent[];
   isActive: boolean;
@@ -169,7 +170,7 @@ function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdow
 
 // ── Main component ──────────────────────────────────────────────────
 
-export function GatheringStaffAnalysis({ mentions, analysis, reviews, progress, isActive, onComplete }: GatheringStaffAnalysisProps) {
+export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, reviews, progress, isActive, onComplete }: GatheringStaffAnalysisProps) {
   const [phase, setPhase] = useState<'loading' | 'results'>('loading');
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollingRef = useRef(false);
@@ -198,13 +199,18 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, progress, 
       msgs.push({ text: `Found ${mentions.length} insights across ${categories.size} categories`, icon: 'insight' });
     }
 
-    // Show analyzing indicator if we have progress but no analysis yet
+    // Show analyzing indicator if we have progress but no final analysis yet
     if (progress.length > 0 && !analysis) {
       msgs.push({ text: 'Running analysis...', icon: 'loading' });
     }
 
     return msgs;
   }, [progress, mentions, analysis]);
+
+  // Preview headline from incremental Sonnet merges (shown on loading screen)
+  const previewHeadline = analysisPreview?.headline;
+  const previewStrengths = analysisPreview?.strengths ?? [];
+  const previewOpportunities = analysisPreview?.opportunities ?? [];
 
   // Transition from loading to results when data arrives
   useEffect(() => {
@@ -323,12 +329,44 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, progress, 
                 </h2>
               </div>
 
+              {/* Preview headline from incremental merges */}
+              {previewHeadline && (
+                <motion.div
+                  className="mb-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-100 shadow-sm"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <div className="text-lg font-serif text-gray-800 leading-snug mb-2">
+                    {previewHeadline}
+                  </div>
+                  {previewStrengths.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-1.5">
+                      {previewStrengths.map((s, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {previewOpportunities.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {previewOpportunities.map((o, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                          {o}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
               {/* Live progress cards */}
               <div className="space-y-2">
                 {progressMessages.map((msg, i) => (
                   <ProgressCard key={`${msg.text}-${i}`} text={msg.text} icon={msg.icon} />
                 ))}
-                {progressMessages.length === 0 && (
+                {progressMessages.length === 0 && !previewHeadline && (
                   <ProgressCard text="Connecting to review sources..." icon="loading" />
                 )}
               </div>
