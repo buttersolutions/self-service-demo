@@ -13,7 +13,7 @@ import { OnboardingButton, OnboardingInput } from '../ui';
 import { useOnboarding } from '@/lib/demo-flow-context';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
 import type { LocationItem } from '../types';
-import type { PlacePhoto } from '@/lib/types';
+import type { PlacePhoto, ReviewAnalysis } from '@/lib/types';
 
 interface GatheringBrandedAppProps {
   businessName: string;
@@ -79,6 +79,8 @@ function FeedReplica({
   primaryColor,
   photos,
   locations,
+  analysis,
+  websiteImages,
   animate,
 }: {
   businessName: string;
@@ -86,12 +88,28 @@ function FeedReplica({
   primaryColor: string;
   photos: PlacePhoto[];
   locations: LocationItem[];
+  analysis: ReviewAnalysis | null;
+  websiteImages: string[];
   animate: boolean;
 }) {
   const feedChannels = buildFeedChannels(locations);
-  const photo1 = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
-  const photo2 = photos[3] ? `/api/places/photo?name=${encodeURIComponent(photos[3].name)}&maxWidthPx=600` : undefined;
+  // Prefer firecrawl website images, fall back to Google Places photos
+  const fcImg1 = websiteImages[0];
+  const fcImg2 = websiteImages[1];
+  const photo1 = fcImg1 ?? (photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined);
+  const photo2 = fcImg2 ?? (photos[3] ? `/api/places/photo?name=${encodeURIComponent(photos[3].name)}&maxWidthPx=600` : undefined);
   const heroPhoto = photos[1] ? `/api/places/photo?name=${encodeURIComponent(photos[1].name)}&maxWidthPx=1200` : undefined;
+
+  // Dynamic post content from analysis
+  const post1Text = analysis?.strengths?.[0]
+    ? `Great news! Customers consistently highlight "${analysis.strengths[0]}" across our locations. Keep up the amazing work, team! 🎉`
+    : `Welcome to the ${businessName} team! We're excited to have everyone on board. 🎉`;
+  const post1Channel = analysis?.strengths?.[0] ? 'Team Shoutouts' : 'Announcements';
+
+  const post2Text = analysis?.opportunities?.[0]
+    ? `New training available: ${analysis.opportunities[0]}. This was identified as a key growth area from recent customer feedback. Check it out in Grow! 📚`
+    : `Quick snap from yesterday's team lunch! Great to see everyone together 🍕`;
+  const post2Channel = analysis?.opportunities?.[0] ? 'Announcements' : 'Office Life';
 
   return (
     <div className="w-[1200px] h-[750px] bg-white flex flex-col" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -235,13 +253,13 @@ function FeedReplica({
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900">{PEOPLE[1].name}</div>
                   <div className="text-xs text-gray-400">
-                    11:28 in <span className="text-gray-400">Announcements</span>
+                    11:28 in <span className="text-gray-400">{post1Channel}</span>
                   </div>
                 </div>
                 <MoreVertical className="size-4 text-gray-300 shrink-0" />
               </div>
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-3">
-                Welcome to the {businessName} team! We&apos;re excited to have everyone on board. 🎉
+                {post1Text}
               </p>
               {photo1 && (
                 <div className="relative h-64 w-full overflow-hidden rounded-lg mb-1">
@@ -290,13 +308,13 @@ function FeedReplica({
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900">{PEOPLE[2].name}</div>
                   <div className="text-xs text-gray-400">
-                    09:15 in <span className="text-gray-400">Office Life</span>
+                    09:15 in <span className="text-gray-400">{post2Channel}</span>
                   </div>
                 </div>
                 <MoreVertical className="size-4 text-gray-300 shrink-0" />
               </div>
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                Quick snap from yesterday&apos;s team lunch! Great to see everyone together 🍕
+                {post2Text}
               </p>
               {/* Reactions bar */}
               <div className="py-3"><div className="w-full h-px bg-gray-100" /></div>
@@ -468,6 +486,8 @@ function MobileFeedReplica({
   primaryColor,
   headerColor,
   photos,
+  analysis,
+  websiteImages,
   animate,
 }: {
   businessName: string;
@@ -475,12 +495,15 @@ function MobileFeedReplica({
   primaryColor: string;
   headerColor: string;
   photos: PlacePhoto[];
+  analysis: ReviewAnalysis | null;
+  websiteImages: string[];
   animate: boolean;
 }) {
-  const storyPhoto1 = photos[2] ? `/api/places/photo?name=${encodeURIComponent(photos[2].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop';
-  const storyPhoto2 = photos[4] ? `/api/places/photo?name=${encodeURIComponent(photos[4].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&h=400&fit=crop';
-  const storyPhoto3 = photos[5] ? `/api/places/photo?name=${encodeURIComponent(photos[5].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=400&fit=crop';
-  const postPhoto = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
+  // Prefer firecrawl website images for stories, fall back to Google photos, then unsplash
+  const storyPhoto1 = websiteImages[0] ?? (photos[2] ? `/api/places/photo?name=${encodeURIComponent(photos[2].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop');
+  const storyPhoto2 = websiteImages[1] ?? (photos[4] ? `/api/places/photo?name=${encodeURIComponent(photos[4].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&h=400&fit=crop');
+  const storyPhoto3 = websiteImages[2] ?? (photos[5] ? `/api/places/photo?name=${encodeURIComponent(photos[5].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=400&fit=crop');
+  const postPhoto = websiteImages[3] ?? (photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined);
 
   return (
     <div className="relative w-[390px] h-[870px] bg-white flex flex-col overflow-hidden" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -592,7 +615,9 @@ function MobileFeedReplica({
             <MoreVertical className="size-5 text-[#C0C0C0] shrink-0 mt-1" />
           </div>
           <p className="text-[14px] text-[#1A2027] leading-relaxed mb-3">
-            Welcome to the {businessName} team! We&apos;re excited to have everyone on board 🎉🚀
+            {analysis?.strengths?.[0]
+              ? `Great news! Customers love "${analysis.strengths[0]}" across our locations. Keep it up! 🎉🚀`
+              : `Welcome to the ${businessName} team! We're excited to have everyone on board 🎉🚀`}
           </p>
           {postPhoto && (
             <div className="w-full h-44 rounded-xl overflow-hidden">
@@ -695,12 +720,47 @@ function PhoneMockup({ children }: { children?: React.ReactNode }) {
 
 // ── Checklist items ──────────────────────────────────────────────────
 
-const CHECKLIST_ITEMS = [
+const FALLBACK_CHECKLIST = [
   'Courses addressing your top review issues',
   'Channels set up for each of your locations',
   'Todo\'s created to boost your weakest areas',
   'Staff recognition based on customer feedback',
 ];
+
+function buildChecklist(analysis: ReviewAnalysis | null, locationCount: number): string[] {
+  if (!analysis || analysis.categoryBreakdown.length === 0) return FALLBACK_CHECKLIST;
+
+  const items: string[] = [];
+
+  // Course from top opportunity
+  const topOpp = analysis.opportunities[0];
+  if (topOpp) {
+    items.push(`Course ready: "${topOpp}"`);
+  } else {
+    items.push('Courses addressing your top review issues');
+  }
+
+  // Channels from locations
+  items.push(`${locationCount} location channel${locationCount === 1 ? '' : 's'} set up`);
+
+  // Strength recognition
+  const topStrength = analysis.strengths[0];
+  if (topStrength) {
+    items.push(`Staff recognised for "${topStrength}"`);
+  } else {
+    items.push('Staff recognition based on customer feedback');
+  }
+
+  // Category-specific todo
+  const topCategory = analysis.categoryBreakdown[0];
+  if (topCategory) {
+    items.push(`${topCategory.allgravyModule} action items created`);
+  } else {
+    items.push('Todo\'s created to boost your weakest areas');
+  }
+
+  return items;
+}
 
 // ── Main component ──────────────────────────────────────────────────
 
@@ -711,9 +771,12 @@ export function GatheringBrandedApp({
   photos,
   isActive,
 }: GatheringBrandedAppProps) {
-  const { brandColorMap } = useOnboarding();
+  const { brandColorMap, state } = useOnboarding();
   const primaryColor = brandColorMap.primaryColor;
   const darkestBrandColor = primaryColor;
+  const analysis = state.gatheringData.reviewAnalysis;
+  const websiteImages = state.business?.websiteImages ?? [];
+  const checklistItems = buildChecklist(analysis, locations.length);
 
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -773,7 +836,7 @@ export function GatheringBrandedApp({
             </motion.p>
 
             <div className="space-y-3">
-              {CHECKLIST_ITEMS.map((item, i) => (
+              {checklistItems.map((item, i) => (
                 <motion.div
                   key={i}
                   className="flex items-start gap-2.5 px-2.5"
@@ -853,7 +916,7 @@ export function GatheringBrandedApp({
               >
                 <LaptopMockup>
                   <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} locations={locations} animate={isActive} />
+                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} locations={locations} analysis={analysis} websiteImages={websiteImages} animate={isActive} />
                   </div>
                 </LaptopMockup>
               </motion.div>
@@ -873,6 +936,8 @@ export function GatheringBrandedApp({
                       primaryColor={primaryColor}
                       headerColor={darkestBrandColor}
                       photos={photos}
+                      analysis={analysis}
+                      websiteImages={websiteImages}
                       animate={isActive}
                     />
                   </div>
