@@ -23,19 +23,40 @@ interface GatheringBrandedAppProps {
   isActive: boolean;
 }
 
-const AVATARS = [
-  'https://i.pravatar.cc/80?img=12',
-  'https://i.pravatar.cc/80?img=32',
-  'https://i.pravatar.cc/80?img=47',
-  'https://i.pravatar.cc/80?img=5',
+const PEOPLE = [
+  { name: 'Sarah Mitchell', bgColor: '#C4F0D5', textColor: '#1B7A3D' },
+  { name: 'James Chen', bgColor: '#D8DAF9', textColor: '#3F3ABF' },
+  { name: 'Emma Rodriguez', bgColor: '#F2C4E0', textColor: '#9B2D6B' },
+  { name: 'Alex Thompson', bgColor: '#BEF5EF', textColor: '#1A7A6D' },
 ];
 
-const PEOPLE = [
-  { name: 'Sarah Mitchell', avatar: AVATARS[0] },
-  { name: 'James Chen', avatar: AVATARS[1] },
-  { name: 'Emma Rodriguez', avatar: AVATARS[2] },
-  { name: 'Alex Thompson', avatar: AVATARS[3] },
-];
+function InitialsAvatar({ person, size, className, style }: {
+  person: typeof PEOPLE[number];
+  size: number;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const initial = person.name.charAt(0).toUpperCase();
+  return (
+    <div
+      className={className}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2.6,
+        backgroundColor: person.bgColor,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        border: '0.5px solid rgba(0,0,0,0.1)',
+        ...style,
+      }}
+    >
+      <span style={{ fontSize: size * 0.42, fontWeight: 600, lineHeight: 1, color: person.textColor }}>{initial}</span>
+    </div>
+  );
+}
 
 const FEED_CHANNELS = [
   { name: 'General', emoji: '💬' },
@@ -142,7 +163,7 @@ function FeedReplica({
           <div className="size-8 rounded-full bg-[#f0f0f0] flex items-center justify-center">
             <Settings className="size-[16px] text-[#4b5563]" strokeWidth={2.5} />
           </div>
-          <img src={PEOPLE[0].avatar} alt="" className="size-9 rounded-xl object-cover border border-[#e5e7eb]" />
+          <InitialsAvatar person={PEOPLE[0]} size={36} style={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
         </div>
       </motion.nav>
 
@@ -206,7 +227,7 @@ function FeedReplica({
               animate={animate ? fadeUp.visible : fadeUp.initial}
               transition={stagger(0.3, 3)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3">
-                <img src={PEOPLE[0].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
+                <InitialsAvatar person={PEOPLE[0]} size={36} style={{ borderRadius: 12 }} />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-900">{PEOPLE[0].name}</div>
                   <div className="text-xs text-gray-400 mb-2">General</div>
@@ -218,7 +239,7 @@ function FeedReplica({
             {/* Post 1: with image */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 4)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <img src={PEOPLE[1].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
+                <InitialsAvatar person={PEOPLE[1]} size={36} style={{ borderRadius: 12 }} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900">{PEOPLE[1].name}</div>
                   <div className="text-xs text-gray-400">
@@ -252,8 +273,8 @@ function FeedReplica({
                     <span className="text-xs">❤️ 1</span>
                   </button>
                   <div className="flex items-center -space-x-1.5 ml-1">
-                    <img src={PEOPLE[2].avatar} alt="" className="size-5 rounded-full border-2 border-white object-cover" />
-                    <img src={PEOPLE[3].avatar} alt="" className="size-5 rounded-full border-2 border-white object-cover" />
+                    <InitialsAvatar person={PEOPLE[2]} size={20} style={{ borderRadius: '50%', border: '2px solid white' }} />
+                    <InitialsAvatar person={PEOPLE[3]} size={20} style={{ borderRadius: '50%', border: '2px solid white' }} />
                   </div>
                   <button className="px-3 py-[6px] rounded-full border border-gray-200 bg-gray-50 text-xs font-medium text-gray-900">
                     5 comments
@@ -273,7 +294,7 @@ function FeedReplica({
             {/* Post 2: text only */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 5)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <img src={PEOPLE[2].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
+                <InitialsAvatar person={PEOPLE[2]} size={36} style={{ borderRadius: 12 }} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900">{PEOPLE[2].name}</div>
                   <div className="text-xs text-gray-400">
@@ -330,7 +351,7 @@ function FeedReplica({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <img src={PEOPLE[2].avatar} alt="" className="size-4 rounded-full object-cover" />
+                        <InitialsAvatar person={PEOPLE[2]} size={16} style={{ borderRadius: '50%' }} />
                         <span className="text-sm font-semibold text-gray-900 truncate">{PEOPLE[2].name}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">🌴 Vacation · 5 days</p>
@@ -517,7 +538,7 @@ function MobileFeedReplica({
         <div className="shrink-0 flex flex-col items-center gap-1">
           <div className="relative">
             <div className="size-[72px] rounded-full overflow-hidden border-[3px] border-[#FA614C] p-[2px]">
-              <img src={PEOPLE[0].avatar} alt="" className="w-full h-full rounded-full object-cover" />
+              <InitialsAvatar person={PEOPLE[0]} size={66} style={{ borderRadius: '50%', width: '100%', height: '100%' }} />
             </div>
             <div className="absolute -top-1 -right-1 size-[20px] rounded-full bg-[#FA614C] flex items-center justify-center border-2 border-white">
               <span className="text-[9px] font-bold text-white">2</span>
@@ -571,7 +592,7 @@ function MobileFeedReplica({
       <motion.div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 3)}>
         <div className="px-4 pt-4 pb-1">
           <div className="flex items-start gap-3 mb-2">
-            <img src={PEOPLE[1].avatar} alt="" className="size-11 rounded-xl object-cover shrink-0" />
+            <InitialsAvatar person={PEOPLE[1]} size={44} style={{ borderRadius: 12 }} />
             <div className="flex-1 min-w-0">
               <div className="text-[15px] font-bold text-[#1A2027]">{PEOPLE[1].name}</div>
               <div className="text-[12px] text-[#7E7E7E]">09:03 in Announcements</div>
@@ -683,10 +704,10 @@ function PhoneMockup({ children }: { children?: React.ReactNode }) {
 // ── Checklist items ──────────────────────────────────────────────────
 
 const CHECKLIST_ITEMS = [
-  'Courses addressing your top review issues',
-  'Channels set up for each of your locations',
-  'Todo\'s created to boost your weakest areas',
-  'Staff recognition based on customer feedback',
+  'Chat groups for each location',
+  'Feeds to post important updates',
+  'Todo lists to streamline operations',
+  'Courses that teach what\'s lacking',
 ];
 
 // ── Main component ──────────────────────────────────────────────────
