@@ -117,7 +117,7 @@ function OnboardingInner() {
       });
   }, [dispatch]);
 
-  const startReviewAnalysisFetch = useCallback((confirmedLocs: LocationItem[]) => {
+  const startReviewAnalysisFetch = useCallback((confirmedLocs: LocationItem[], lite = true) => {
     const places: PlaceSummary[] = confirmedLocs.map((loc) => ({
       placeId: loc.id,
       displayName: loc.name,
@@ -125,16 +125,18 @@ function OnboardingInner() {
       location: { lat: loc.lat, lng: loc.lng },
     }));
 
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviewAnalysis', label: 'Review Analysis (SSE)' } });
+    const trackKey = lite ? 'reviewAnalysis' : 'reviewAnalysisFull';
+    const trackLabel = lite ? 'Review Analysis (SSE lite)' : 'Review Analysis (SSE full)';
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: trackKey, label: trackLabel } });
 
-    fetch('/api/demo/scan/analyze?lite=1', {
+    fetch(`/api/demo/scan/analyze${lite ? '?lite=1' : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ locations: places }),
     })
       .then(async (res) => {
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `connected (${res.status})` } });
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `connected (${res.status})` } });
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -173,32 +175,32 @@ function OnboardingInner() {
                 if (eventName === 'batch_analysis') {
                   const insights = data.insights as ReviewInsight[];
                   insightCount += insights.length;
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
                   dispatch({ type: 'APPEND_REVIEW_INSIGHTS', payload: insights });
                 } else if (eventName === 'analysis') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `analysis: final (${data.insights?.length ?? 0} insights)` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis: final (${data.insights?.length ?? 0} insights)` } });
                   const analysisData = data as ReviewAnalysis;
                   dispatch({ type: 'SET_REVIEW_ANALYSIS', payload: analysisData });
                 } else if (eventName === 'error') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
                 } else if (eventName === 'timing') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `timing: ${data.label} (${data.detail ?? ''})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `timing: ${data.label} (${data.detail ?? ''})` } });
                 } else if (eventName === 'reviews_progress') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
                   dispatch({ type: 'APPEND_REVIEW_PROGRESS', payload: { placeId: data.placeId, displayName: data.displayName, reviewCount: data.reviewCount, sort: data.sort } });
                 } else if (eventName === 'done') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: 'done' } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'done' } });
                 } else {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `${eventName}` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `${eventName}` } });
                 }
               } catch {
-                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `parse-error: ${eventName}` } });
+                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `parse-error: ${eventName}` } });
               }
             }
           }
         }
 
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: 'stream closed' } });
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'stream closed' } });
 
         dispatch({
           type: 'SET_REVIEW_ANALYSIS_FALLBACK',
@@ -215,7 +217,7 @@ function OnboardingInner() {
           },
         });
 
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviewAnalysis', status: 'done' } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'done' } });
       })
       .catch((err: unknown) => {
         dispatch({
@@ -232,7 +234,7 @@ function OnboardingInner() {
             opportunities: [],
           },
         });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviewAnalysis', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
       });
   }, [dispatch]);
 
@@ -397,7 +399,7 @@ function OnboardingInner() {
     // full analysis across all locations will supersede it via SET_REVIEW_ANALYSIS
     if (confirmedLocs.length > 0) {
       startReviewsFetch(confirmedLocs.map((l) => l.id));
-      startReviewAnalysisFetch(confirmedLocs);
+      startReviewAnalysisFetch(confirmedLocs, false); // full mode — all locations, 3 Outscraper calls each
     }
   }, [startReviewsFetch, startReviewAnalysisFetch]);
 
