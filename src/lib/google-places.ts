@@ -33,39 +33,39 @@ export async function textSearch(body: Record<string, unknown>): Promise<PlaceSu
 }
 
 export function brandFilter(websiteDomain: string, queryDisplayName: string) {
-  const brandName = websiteDomain.split(".")[0]; // e.g. "maharani-hamburg"
-  // Extract meaningful brand words (drop city/generic suffixes, short words)
-  const brandWords = brandName
-    .split(/[-_]/)
-    .filter((w) => w.length > 2)
-    .map((w) => w.toLowerCase());
+  // Use full domain with TLD for strict matching (e.g. "picopizza.dk", not just "picopizza")
+  const fullDomain = websiteDomain.toLowerCase();
+  const brandName = fullDomain.split(".")[0]; // e.g. "picopizza"
+
   const queryWords = queryDisplayName
     .toLowerCase()
     .split(/\s+/)
     .filter((w) => w.length > 2);
 
   return (p: PlaceSummary) => {
-    // Check 1: website domain contains the brand name (original logic)
+    // Check 1: place's website domain matches the full domain (including TLD)
     if (p.websiteUri) {
       try {
-        const hostname = new URL(p.websiteUri).hostname.replace("www.", "");
-        if (hostname.includes(brandName)) return true;
-        // Check 1b: shared domain root (e.g. maharani-hamburg / maharaja-hamburg
-        // share the city segment and have similar structure)
-        const hostParts = hostname.split(".")[0].split(/[-_]/).filter((w) => w.length > 2);
-        const sharedWords = hostParts.filter((w) => brandWords.includes(w));
-        if (sharedWords.length > 0 && hostParts.length > 0) return true;
+        const hostname = new URL(p.websiteUri).hostname.replace("www.", "").toLowerCase();
+        // Exact domain match (strongest signal)
+        if (hostname === fullDomain) return true;
+        // Subdomain of the same domain (e.g. order.picopizza.dk)
+        if (hostname.endsWith(`.${fullDomain}`)) return true;
       } catch {
         // ignore
       }
     }
 
-    // Check 2: display name shares significant words with the query
-    // (catches sister brands like Maharani/Maharaja under same business)
-    const nameLower = p.displayName.toLowerCase();
-    const nameWords = nameLower.split(/\s+/).filter((w) => w.length > 2);
-    const sharedNameWords = queryWords.filter((w) => nameWords.includes(w));
-    if (sharedNameWords.length > 0) return true;
+    // Check 2: display name matches AND place has no website (or website unavailable)
+    // This catches locations that Google doesn't have a website for but clearly belong
+    // to the same chain based on name. Require ALL significant query words to match,
+    // not just one (avoids "Pico" or "Pizza" alone matching unrelated places).
+    if (!p.websiteUri) {
+      const nameLower = p.displayName.toLowerCase();
+      const nameWords = nameLower.split(/\s+/).filter((w) => w.length > 2);
+      const allQueryWordsMatch = queryWords.length > 0 && queryWords.every((w) => nameWords.includes(w));
+      if (allQueryWordsMatch) return true;
+    }
 
     return false;
   };

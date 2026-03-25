@@ -175,6 +175,14 @@ function OnboardingInner() {
         ? chainLocations
         : chainLocations.filter(loc => !place.countryCode || loc.countryCode === place.countryCode);
 
+      // Sort by country — selected country first, then alphabetically by country code
+      const selectedCountry = place.countryCode;
+      filteredLocations.sort((a, b) => {
+        if (a.countryCode === selectedCountry && b.countryCode !== selectedCountry) return -1;
+        if (b.countryCode === selectedCountry && a.countryCode !== selectedCountry) return 1;
+        return (a.countryCode ?? '').localeCompare(b.countryCode ?? '');
+      });
+
       dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
       domainRef.current = domain;
 
