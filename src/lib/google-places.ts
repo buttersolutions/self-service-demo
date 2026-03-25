@@ -25,7 +25,7 @@ async function placesRequest(path: string, fieldMask: string, body?: object) {
 // --- Text Search: find chain locations ---
 
 const FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location,places.addressComponents,places.userRatingCount";
+  "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location,places.addressComponents,places.userRatingCount,places.rating";
 
 export async function textSearch(body: Record<string, unknown>): Promise<PlaceSummary[]> {
   const data = await placesRequest("/places:searchText", FIELD_MASK, body);
@@ -175,6 +175,7 @@ function mapPlace(raw: any): PlaceSummary {
     websiteUri: raw.websiteUri,
     ...(countryCode && { countryCode }),
     userRatingCount: raw.userRatingCount ?? 0,
+    ...(raw.rating != null && { rating: raw.rating }),
     location: {
       lat: raw.location?.latitude ?? 0,
       lng: raw.location?.longitude ?? 0,

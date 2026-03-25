@@ -166,6 +166,8 @@ function OnboardingInner() {
           countryCode: p.countryCode,
           lat: p.location.lat,
           lng: p.location.lng,
+          userRatingCount: p.userRatingCount,
+          rating: p.rating,
         };
       });
 

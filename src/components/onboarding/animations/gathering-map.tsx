@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Map, MapMarker, MarkerContent } from '@/components/ui/map';
+import { Star } from 'lucide-react';
 import { CountUp } from '../ui/count-up';
 import type { LocationItem } from '../types';
 import MapLibreGL from 'maplibre-gl';
@@ -185,6 +186,7 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
                 >
                   <MarkerContent>
                     <motion.div
+                      className="flex flex-col items-center"
                       initial={{ opacity: 0, y: -12, scale: 0.5 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{
@@ -194,6 +196,36 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
                         mass: 0.8,
                       }}
                     >
+                      {/* Info card */}
+                      <motion.div
+                        className="bg-white rounded-lg px-2.5 py-1.5 mb-1 shadow-lg border border-gray-100 max-w-[180px]"
+                        initial={{ opacity: 0, y: 4, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ delay: 0.3, duration: 0.3 }}
+                      >
+                        <div className="text-[11px] font-semibold text-gray-900 truncate leading-tight">
+                          {loc.name.split(' - ').pop()?.trim() ?? loc.name}
+                        </div>
+                        <div className="text-[9px] text-gray-400 truncate leading-tight mt-0.5">
+                          {loc.address.split(',').slice(0, 2).join(',')}
+                        </div>
+                        {(loc.rating != null || (loc.userRatingCount ?? 0) > 0) && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {loc.rating != null && (
+                              <div className="flex items-center gap-0.5">
+                                <Star className="size-2.5 fill-amber-400 text-amber-400" />
+                                <span className="text-[10px] font-medium text-gray-700">{loc.rating.toFixed(1)}</span>
+                              </div>
+                            )}
+                            {(loc.userRatingCount ?? 0) > 0 && (
+                              <span className="text-[9px] text-gray-400">
+                                ({loc.userRatingCount} reviews)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </motion.div>
+                      {/* Pin */}
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width={i === 0 ? 36 : 26}
