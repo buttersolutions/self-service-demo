@@ -1,9 +1,9 @@
 import { StarRating } from "./star-rating";
 import { cn } from "@/lib/utils";
-import type { StaffMention } from "@/lib/types";
+import type { ReviewInsight } from "@/lib/types";
 
 interface StaffReviewCardProps {
-  mention: StaffMention;
+  mention: ReviewInsight;
 }
 
 export function StaffReviewCard({ mention }: StaffReviewCardProps) {
@@ -27,45 +27,14 @@ export function StaffReviewCard({ mention }: StaffReviewCardProps) {
       </div>
 
       <p className="mt-2 text-sm leading-relaxed">
-        {highlightNames(mention.relevantExcerpt, mention.staffNames)}
+        {mention.relevantExcerpt}
       </p>
 
-      {mention.staffNames.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {mention.staffNames.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-            >
-              {name}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="mt-2 flex flex-wrap gap-1">
+        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+          {mention.allgravyModule}
+        </span>
+      </div>
     </div>
   );
-}
-
-function highlightNames(text: string, names: string[]): React.ReactNode {
-  if (!names.length) return text;
-
-  const pattern = new RegExp(`(${names.map(escapeRegex).join("|")})`, "gi");
-  const parts = text.split(pattern);
-
-  return parts.map((part, i) => {
-    const isName = names.some(
-      (n) => n.toLowerCase() === part.toLowerCase()
-    );
-    return isName ? (
-      <strong key={i} className="font-semibold text-primary">
-        {part}
-      </strong>
-    ) : (
-      part
-    );
-  });
-}
-
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

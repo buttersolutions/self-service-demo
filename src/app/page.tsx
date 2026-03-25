@@ -13,10 +13,10 @@ import { ReportCTA } from "@/components/demo/report-cta";
 import { cn } from "@/lib/utils";
 import type {
   PlaceSummary,
-  StaffMention,
+  ReviewInsight,
   ScanResult,
   PlaceDetails,
-  StaffAnalysis,
+  ReviewAnalysis,
 } from "@/lib/types";
 
 // --- Types ---
@@ -31,17 +31,7 @@ interface BatchAnalysis {
   placeId: string;
   displayName: string;
   batchIndex: number;
-  mentions: StaffMention[];
-  namedEmployees: string[];
-}
-
-interface LocationAnalysis {
-  placeId: string;
-  displayName: string;
-  mentions: StaffMention[];
-  namedEmployees: string[];
-  positiveCount: number;
-  negativeCount: number;
+  insights: ReviewInsight[];
 }
 
 // --- SSE reader ---
@@ -84,7 +74,7 @@ export default function Home() {
 
   // Scanning state
   const [reviewProgress, setReviewProgress] = useState<ReviewProgress[]>([]);
-  const [allMentions, setAllMentions] = useState<StaffMention[]>([]);
+  const [allMentions, setAllMentions] = useState<ReviewInsight[]>([]);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
   // Chain state
@@ -160,9 +150,9 @@ export default function Home() {
         },
         batch_analysis: (data) => {
           const ba = data as BatchAnalysis;
-          setAllMentions((prev) => [...prev, ...ba.mentions]);
-          if (ba.mentions.length > 0) {
-            setScanStatus("Analyzing staff mentions...");
+          setAllMentions((prev) => [...prev, ...ba.insights]);
+          if (ba.insights.length > 0) {
+            setScanStatus("Analyzing operational insights...");
           }
         },
         done: (data) => {
@@ -202,7 +192,7 @@ export default function Home() {
           setReviewProgress((prev) => [...prev, data as ReviewProgress]),
         batch_analysis: (data) => {
           const ba = data as BatchAnalysis;
-          setAllMentions((prev) => [...prev, ...ba.mentions]);
+          setAllMentions((prev) => [...prev, ...ba.insights]);
         },
         done: (data) => {
           const result = data as ScanResult;
@@ -215,30 +205,24 @@ export default function Home() {
                 ...prev.locationDetails,
                 ...result.locationDetails,
               ],
-              staffAnalysis: result.staffAnalysis
+              reviewAnalysis: result.reviewAnalysis
                 ? {
-                    ...result.staffAnalysis,
-                    mentions: [
-                      ...(prev.staffAnalysis?.mentions ?? []),
-                      ...result.staffAnalysis.mentions,
-                    ],
-                    namedEmployees: [
-                      ...new Set([
-                        ...(prev.staffAnalysis?.namedEmployees ?? []),
-                        ...result.staffAnalysis.namedEmployees,
-                      ]),
+                    ...result.reviewAnalysis,
+                    insights: [
+                      ...(prev.reviewAnalysis?.insights ?? []),
+                      ...result.reviewAnalysis.insights,
                     ],
                     totalReviewsAnalyzed:
-                      (prev.staffAnalysis?.totalReviewsAnalyzed ?? 0) +
-                      result.staffAnalysis.totalReviewsAnalyzed,
+                      (prev.reviewAnalysis?.totalReviewsAnalyzed ?? 0) +
+                      result.reviewAnalysis.totalReviewsAnalyzed,
                     positiveCount:
-                      (prev.staffAnalysis?.positiveCount ?? 0) +
-                      result.staffAnalysis.positiveCount,
+                      (prev.reviewAnalysis?.positiveCount ?? 0) +
+                      result.reviewAnalysis.positiveCount,
                     negativeCount:
-                      (prev.staffAnalysis?.negativeCount ?? 0) +
-                      result.staffAnalysis.negativeCount,
+                      (prev.reviewAnalysis?.negativeCount ?? 0) +
+                      result.reviewAnalysis.negativeCount,
                   }
-                : prev.staffAnalysis,
+                : prev.reviewAnalysis,
             };
           });
           setChainAnalyzing(false);
@@ -449,104 +433,66 @@ export default function Home() {
 // --- Report section (inline) ---
 
 function Report({ result }: { result: ScanResult }) {
-  const { staffAnalysis, locationDetails, locations } = result;
-  const positiveMentions =
-    staffAnalysis?.mentions.filter((m) => m.sentiment === "positive") ?? [];
-  const negativeMentions =
-    staffAnalysis?.mentions.filter((m) => m.sentiment === "negative") ?? [];
-  const champions =
-    staffAnalysis?.namedEmployees.filter((name) =>
-      positiveMentions.some((m) => m.staffNames.includes(name))
-    ) ?? [];
+  const { reviewAnalysis, locationDetails, locations } = result;
+  const positiveInsights =
+    reviewAnalysis?.insights.filter((m) => m.sentiment === "positive") ?? [];
+  const negativeInsights =
+    reviewAnalysis?.insights.filter((m) => m.sentiment === "negative") ?? [];
 
   return (
     <div className="mx-auto max-w-4xl px-6 animate-in fade-in duration-700">
       {/* Section 1: Narrative Hero */}
-      {staffAnalysis && (
+      {reviewAnalysis && (
         <StaffNarrativeHero
-          analysis={staffAnalysis}
+          analysis={reviewAnalysis}
           locationCount={locations.length}
           className="py-12 md:py-20 animate-in fade-in slide-in-from-bottom-4 duration-700"
         />
       )}
 
-      {!staffAnalysis && (
+      {!reviewAnalysis && (
         <section className="py-12">
-          <h1 className="text-3xl font-bold">Staff Report</h1>
+          <h1 className="text-3xl font-bold">Review Analysis</h1>
           <p className="mt-2 text-muted-foreground">
             We scanned {locations.length} location
             {locations.length === 1 ? "" : "s"} but couldn&apos;t find enough
-            staff-related reviews to generate insights.
+            relevant reviews to generate insights.
           </p>
         </section>
       )}
 
-      {/* Section 2: Staff Highlights */}
-      {staffAnalysis && staffAnalysis.mentions.length > 0 && (
+      {/* Section 2: Operational Insights */}
+      {reviewAnalysis && reviewAnalysis.insights.length > 0 && (
         <section className="pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
           <h2 className="text-xl font-bold">
-            What customers say about your team
+            What customers say about your operations
           </h2>
 
-          {positiveMentions.length > 0 && (
+          {positiveInsights.length > 0 && (
             <div className="mt-6">
               <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-green-700">
-                Positive mentions ({positiveMentions.length})
+                Strengths ({positiveInsights.length})
               </h3>
               <div className="grid gap-3 sm:grid-cols-2">
-                {positiveMentions.map((m, i) => (
+                {positiveInsights.map((m, i) => (
                   <StaffReviewCard key={i} mention={m} />
                 ))}
               </div>
             </div>
           )}
 
-          {negativeMentions.length > 0 && (
+          {negativeInsights.length > 0 && (
             <div className="mt-8">
               <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-amber-700">
-                Areas for improvement ({negativeMentions.length})
+                Areas for improvement ({negativeInsights.length})
               </h3>
               <div className="grid gap-3 sm:grid-cols-2">
-                {negativeMentions.map((m, i) => (
+                {negativeInsights.map((m, i) => (
                   <StaffReviewCard key={i} mention={m} />
                 ))}
               </div>
             </div>
           )}
-        </section>
-      )}
-
-      {/* Section 3: Team Champions */}
-      {champions.length > 0 && staffAnalysis && (
-        <section className="border-t border-border py-12 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
-          <h2 className="text-xl font-bold">Your team champions</h2>
-          <p className="mt-1 text-muted-foreground">
-            Customers called out these employees by name.
-          </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {champions.map((name) => {
-              const mentions = positiveMentions.filter((m) =>
-                m.staffNames.includes(name)
-              );
-              return (
-                <div
-                  key={name}
-                  className="rounded-xl border border-primary/20 bg-primary/5 p-4"
-                >
-                  <p className="text-lg font-bold text-primary">{name}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {mentions.length} positive mention
-                    {mentions.length === 1 ? "" : "s"}
-                  </p>
-                  {mentions[0] && (
-                    <p className="mt-2 text-sm italic text-foreground/70">
-                      &ldquo;{mentions[0].relevantExcerpt}&rdquo;
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </section>
       )}
 

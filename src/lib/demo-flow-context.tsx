@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type Dispatch,
 } from "react";
-import type { PlaceSummary, StaffMention, StaffAnalysis } from "./types";
+import type { PlaceSummary, ReviewInsight, ReviewAnalysis } from "./types";
 import type {
   BusinessData,
   FetchTiming,
@@ -33,12 +33,11 @@ export interface OnboardingState {
 
 const initialGatheringData: GatheringData = {
   reviews: null,
-  insights: null,
   company: null,
   persons: null,
   photos: [],
-  staffMentions: [],
-  staffAnalysis: null,
+  reviewInsights: [],
+  reviewAnalysis: null,
 };
 
 const initialState: OnboardingState = {
@@ -62,12 +61,12 @@ export type OnboardingAction =
   | { type: "SET_LOCATIONS"; payload: LocationItem[] }
   | { type: "UPDATE_GATHERING_DATA"; payload: Partial<GatheringData> }
   | { type: "MERGE_REVIEWS"; payload: ReviewItem[] }
-  | { type: "APPEND_STAFF_MENTIONS"; payload: StaffMention[] }
-  | { type: "SET_STAFF_ANALYSIS"; payload: StaffAnalysis }
+  | { type: "APPEND_REVIEW_INSIGHTS"; payload: ReviewInsight[] }
+  | { type: "SET_REVIEW_ANALYSIS"; payload: ReviewAnalysis }
   | { type: "TRACK_FETCH_START"; payload: { key: string; label: string } }
   | { type: "TRACK_FETCH_END"; payload: { key: string; status: "done" | "error"; errorMessage?: string } }
   | { type: "TRACK_SSE_EVENT"; payload: { key: string; event: string } }
-  | { type: "SET_STAFF_ANALYSIS_FALLBACK"; payload: StaffAnalysis }
+  | { type: "SET_REVIEW_ANALYSIS_FALLBACK"; payload: ReviewAnalysis }
   | { type: "RESET" };
 
 /* ── Reducer ────────────────────────────────────────────────────────── */
@@ -103,21 +102,21 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
       }
       return { ...state, gatheringData: { ...state.gatheringData, reviews: merged } };
     }
-    case "APPEND_STAFF_MENTIONS":
+    case "APPEND_REVIEW_INSIGHTS":
       return {
         ...state,
         gatheringData: {
           ...state.gatheringData,
-          staffMentions: [...state.gatheringData.staffMentions, ...action.payload],
+          reviewInsights: [...state.gatheringData.reviewInsights, ...action.payload],
         },
       };
-    case "SET_STAFF_ANALYSIS":
+    case "SET_REVIEW_ANALYSIS":
       return {
         ...state,
         gatheringData: {
           ...state.gatheringData,
-          staffAnalysis: action.payload,
-          staffMentions: action.payload.mentions,
+          reviewAnalysis: action.payload,
+          reviewInsights: action.payload.insights,
         },
       };
     case "TRACK_FETCH_START": {
@@ -157,13 +156,13 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
         },
       };
     }
-    case "SET_STAFF_ANALYSIS_FALLBACK":
-      if (state.gatheringData.staffAnalysis !== null) return state;
+    case "SET_REVIEW_ANALYSIS_FALLBACK":
+      if (state.gatheringData.reviewAnalysis !== null) return state;
       return {
         ...state,
         gatheringData: {
           ...state.gatheringData,
-          staffAnalysis: { ...action.payload, mentions: state.gatheringData.staffMentions },
+          reviewAnalysis: { ...action.payload, insights: state.gatheringData.reviewInsights },
         },
       };
     case "RESET":

@@ -23,31 +23,41 @@ interface GatheringBrandedAppProps {
   isActive: boolean;
 }
 
-const AVATARS = [
-  'https://i.pravatar.cc/80?img=12',
-  'https://i.pravatar.cc/80?img=32',
-  'https://i.pravatar.cc/80?img=47',
-  'https://i.pravatar.cc/80?img=5',
-];
+const AVATAR_COLORS = ['#625CE4', '#E45C7A', '#5CAE60', '#D4A03E', '#5C8DE4', '#E4835C'];
 
 const PEOPLE = [
-  { name: 'Sarah Mitchell', avatar: AVATARS[0] },
-  { name: 'James Chen', avatar: AVATARS[1] },
-  { name: 'Emma Rodriguez', avatar: AVATARS[2] },
-  { name: 'Alex Thompson', avatar: AVATARS[3] },
+  { name: 'Sarah Mitchell', initials: 'SM', color: AVATAR_COLORS[0] },
+  { name: 'James Chen', initials: 'JC', color: AVATAR_COLORS[1] },
+  { name: 'Emma Rodriguez', initials: 'ER', color: AVATAR_COLORS[2] },
+  { name: 'Alex Thompson', initials: 'AT', color: AVATAR_COLORS[3] },
 ];
 
-const FEED_CHANNELS = [
+function AvatarCircle({ initials, color, size = 36 }: { initials: string; color: string; size?: number }) {
+  return (
+    <div
+      className="rounded-xl flex items-center justify-center shrink-0"
+      style={{ width: size, height: size, backgroundColor: color }}
+    >
+      <span className="text-white font-semibold" style={{ fontSize: size * 0.35 }}>{initials}</span>
+    </div>
+  );
+}
+
+const DEFAULT_CHANNELS = [
   { name: 'General', emoji: '💬' },
   { name: 'Announcements', emoji: '📢' },
   { name: 'Team Shoutouts', emoji: '🏆' },
-  { name: 'Office Life', emoji: '🏢' },
   { name: 'New Starters', emoji: '👋' },
   { name: 'Ideas & Feedback', emoji: '💡' },
-  { name: 'Social', emoji: '🎉' },
-  { name: 'Events', emoji: '📅' },
-  { name: 'Random', emoji: '🎲' },
 ];
+
+function buildFeedChannels(locations: LocationItem[]) {
+  const locationChannels = locations.slice(0, 4).map((loc) => {
+    const shortName = loc.name.split(' - ').pop()?.trim() ?? loc.name;
+    return { name: shortName, emoji: '📍' };
+  });
+  return [...DEFAULT_CHANNELS, ...locationChannels];
+}
 
 const NAV_ITEMS: { label: string; icon: typeof Home }[] = [
   { label: 'Home', icon: Home },
@@ -68,14 +78,17 @@ function FeedReplica({
   logoUrl,
   primaryColor,
   photos,
+  locations,
   animate,
 }: {
   businessName: string;
   logoUrl: string | null;
   primaryColor: string;
   photos: PlacePhoto[];
+  locations: LocationItem[];
   animate: boolean;
 }) {
+  const feedChannels = buildFeedChannels(locations);
   const photo1 = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
   const photo2 = photos[3] ? `/api/places/photo?name=${encodeURIComponent(photos[3].name)}&maxWidthPx=600` : undefined;
   const heroPhoto = photos[1] ? `/api/places/photo?name=${encodeURIComponent(photos[1].name)}&maxWidthPx=1200` : undefined;
@@ -142,7 +155,7 @@ function FeedReplica({
           <div className="size-8 rounded-full bg-[#f0f0f0] flex items-center justify-center">
             <Settings className="size-[16px] text-[#4b5563]" strokeWidth={2.5} />
           </div>
-          <img src={PEOPLE[0].avatar} alt="" className="size-9 rounded-xl object-cover border border-[#e5e7eb]" />
+          <AvatarCircle initials={PEOPLE[0].initials} color={PEOPLE[0].color} size={36} />
         </div>
       </motion.nav>
 
@@ -179,7 +192,7 @@ function FeedReplica({
             </div>
 
             {/* Feed channels */}
-            {FEED_CHANNELS.map((feed) => (
+            {feedChannels.map((feed) => (
               <div key={feed.name} className="flex h-8 items-center gap-2 rounded-md px-3 py-1 text-sm text-gray-500 hover:bg-white/50">
                 <span className="text-sm leading-none">{feed.emoji}</span>
                 <span>{feed.name}</span>
@@ -206,7 +219,7 @@ function FeedReplica({
               animate={animate ? fadeUp.visible : fadeUp.initial}
               transition={stagger(0.3, 3)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3">
-                <img src={PEOPLE[0].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
+                <AvatarCircle initials={PEOPLE[0].initials} color={PEOPLE[0].color} />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-900">{PEOPLE[0].name}</div>
                   <div className="text-xs text-gray-400 mb-2">General</div>
@@ -218,7 +231,7 @@ function FeedReplica({
             {/* Post 1: with image */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 4)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <img src={PEOPLE[1].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
+                <AvatarCircle initials={PEOPLE[1].initials} color={PEOPLE[1].color} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900">{PEOPLE[1].name}</div>
                   <div className="text-xs text-gray-400">
@@ -252,8 +265,8 @@ function FeedReplica({
                     <span className="text-xs">❤️ 1</span>
                   </button>
                   <div className="flex items-center -space-x-1.5 ml-1">
-                    <img src={PEOPLE[2].avatar} alt="" className="size-5 rounded-full border-2 border-white object-cover" />
-                    <img src={PEOPLE[3].avatar} alt="" className="size-5 rounded-full border-2 border-white object-cover" />
+                    <AvatarCircle initials={PEOPLE[2].initials} color={PEOPLE[2].color} size={20} />
+                    <AvatarCircle initials={PEOPLE[3].initials} color={PEOPLE[3].color} size={20} />
                   </div>
                   <button className="px-3 py-[6px] rounded-full border border-gray-200 bg-gray-50 text-xs font-medium text-gray-900">
                     5 comments
@@ -273,7 +286,7 @@ function FeedReplica({
             {/* Post 2: text only */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 5)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <img src={PEOPLE[2].avatar} alt="" className="size-9 rounded-xl object-cover shrink-0" />
+                <AvatarCircle initials={PEOPLE[2].initials} color={PEOPLE[2].color} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900">{PEOPLE[2].name}</div>
                   <div className="text-xs text-gray-400">
@@ -330,7 +343,7 @@ function FeedReplica({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <img src={PEOPLE[2].avatar} alt="" className="size-4 rounded-full object-cover" />
+                        <AvatarCircle initials={PEOPLE[2].initials} color={PEOPLE[2].color} size={16} />
                         <span className="text-sm font-semibold text-gray-900 truncate">{PEOPLE[2].name}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">🌴 Vacation · 5 days</p>
@@ -517,7 +530,7 @@ function MobileFeedReplica({
         <div className="shrink-0 flex flex-col items-center gap-1">
           <div className="relative">
             <div className="size-[72px] rounded-full overflow-hidden border-[3px] border-[#FA614C] p-[2px]">
-              <img src={PEOPLE[0].avatar} alt="" className="w-full h-full rounded-full object-cover" />
+              <AvatarCircle initials={PEOPLE[0].initials} color={PEOPLE[0].color} size={40} />
             </div>
             <div className="absolute -top-1 -right-1 size-[20px] rounded-full bg-[#FA614C] flex items-center justify-center border-2 border-white">
               <span className="text-[9px] font-bold text-white">2</span>
@@ -571,7 +584,7 @@ function MobileFeedReplica({
       <motion.div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 3)}>
         <div className="px-4 pt-4 pb-1">
           <div className="flex items-start gap-3 mb-2">
-            <img src={PEOPLE[1].avatar} alt="" className="size-11 rounded-xl object-cover shrink-0" />
+            <AvatarCircle initials={PEOPLE[1].initials} color={PEOPLE[1].color} size={44} />
             <div className="flex-1 min-w-0">
               <div className="text-[15px] font-bold text-[#1A2027]">{PEOPLE[1].name}</div>
               <div className="text-[12px] text-[#7E7E7E]">09:03 in Announcements</div>
@@ -840,7 +853,7 @@ export function GatheringBrandedApp({
               >
                 <LaptopMockup>
                   <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} locations={locations} animate={isActive} />
                   </div>
                 </LaptopMockup>
               </motion.div>

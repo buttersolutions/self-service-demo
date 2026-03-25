@@ -31,7 +31,6 @@ function summarizeRun(row: RunDetail): RunSummary {
   const r = row.result;
   const pipelines = r.pipelines;
   const statuses = [
-    pipelines.saber.status,
     pipelines.googlePlaces.status,
     pipelines.outscraper.status,
     pipelines.logoDev.status,
@@ -47,7 +46,7 @@ function summarizeRun(row: RunDetail): RunSummary {
     pipelines_total: statuses.length,
     locations_count: pipelines.googlePlaces.data?.locations.length ?? 0,
     persons_count: pipelines.waterfall.data?.persons.length ?? 0,
-    signals_count: pipelines.saber.completedCount ?? 0,
+    signals_count: 0,
   };
 }
 

@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchOutscraperReviews } from "@/lib/outscraper";
 import { getPlaceDetails } from "@/lib/google-places";
-import type { PlaceSummary, StaffAnalysis, StaffMention } from "@/lib/types";
+import type { PlaceSummary, ReviewAnalysis, ReviewInsight, CategoryBreakdown } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -19,25 +19,39 @@ interface ReviewForAnalysis {
   locationName: string;
 }
 
-const PER_LOCATION_PROMPT = `Analyze these customer reviews for ONE location. Find mentions of staff, employees, and service quality.
+const CATEGORY_MODULE_MAP: Record<string, string> = {
+  communication: "Chat & Messaging",
+  training: "Learning & Training",
+  compliance: "Compliance & Safety",
+  "service-quality": "Task Management",
+  scheduling: "Scheduling",
+  onboarding: "Onboarding",
+};
 
-Extract ONLY staff/service-related reviews. Skip reviews about food, decor, prices with no staff mention.
+const PER_LOCATION_PROMPT = `Analyze these customer reviews for operational insights. Categorize each review that mentions service quality, communication, training, compliance, scheduling, or onboarding issues.
+
+For each relevant review, identify:
+1. The category of issue/praise: communication, training, compliance, service-quality, scheduling, or onboarding
+2. Which Allgravy module addresses it: Chat & Messaging, Learning & Training, Compliance & Safety, Task Management, Scheduling, or Onboarding
+3. Whether the sentiment is positive (things going well) or negative (problem area)
+
+IMPORTANT: Include BOTH positive and negative reviews. Show what's working well AND what needs improvement. Skip reviews that are purely about food quality, decor, or prices with no operational/service angle.
 
 Return valid JSON:
 {
-  "mentions": [
+  "insights": [
     {
       "reviewAuthor": string,
       "reviewText": string (full text),
       "reviewRating": number (1-5),
       "reviewDate": string,
       "sentiment": "positive" | "negative",
-      "staffNames": string[] (employee first names, empty if generic like "the waiter"),
-      "relevantExcerpt": string (the specific sentence about staff),
-      "locationName": string
+      "category": "communication" | "training" | "compliance" | "service-quality" | "scheduling" | "onboarding",
+      "relevantExcerpt": string (the specific sentence about the operational issue),
+      "locationName": string,
+      "allgravyModule": string
     }
   ],
-  "namedEmployees": string[],
   "positiveCount": number,
   "negativeCount": number,
   "totalReviewsAnalyzed": number
@@ -46,18 +60,24 @@ Return valid JSON:
 Reviews:
 `;
 
-const MERGE_PROMPT = `You have staff analysis summaries from multiple locations of the same business. Create a unified headline and body.
+const MERGE_PROMPT = `You have review analysis from multiple locations of the same business. Create a unified summary.
 
 Rules:
-- headline: Max 12 words, punchy, action-oriented. Frame around the best-mentioned employee name if one exists (e.g. "Make every shift feel like Sarah's"). Never generic.
-- body: 2-3 sentences. Connect findings to the business opportunity — great staff = standard to replicate, complaints = training gap. Actionable and solvable.
-- standoutEmployee: Most positively mentioned employee name, or null.
+- headline: Max 12 words. Lead with what's working well, hint at what could improve. Punchy and specific to this business.
+- body: 2-3 sentences. First acknowledge strengths, then frame problems as opportunities. Actionable and solvable.
+- strengths: Top 2-3 things customers love about service/operations (short phrases, not full sentences)
+- opportunities: Top 2-3 problem areas that map to Allgravy modules (short phrases)
+- categoryBreakdown: For each category found, calculate percentage of total insights and dominant sentiment.
 
 Return valid JSON:
 {
   "headline": string,
   "body": string,
-  "standoutEmployee": string | null
+  "strengths": string[],
+  "opportunities": string[],
+  "categoryBreakdown": [
+    { "category": string, "allgravyModule": string, "percentage": number, "count": number, "sentiment": "mostly-positive" | "mostly-negative" | "mixed" }
+  ]
 }
 
 Here are the per-location summaries:
@@ -74,8 +94,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 async function analyzeBatch(
   reviews: ReviewForAnalysis[]
 ): Promise<{
-  mentions: StaffMention[];
-  namedEmployees: string[];
+  insights: ReviewInsight[];
   positiveCount: number;
   negativeCount: number;
   totalReviewsAnalyzed: number;
@@ -102,17 +121,17 @@ async function analyzeBatch(
   try {
     const parsed = JSON.parse(jsonMatch[0]);
     return {
-      mentions: (parsed.mentions ?? []).map((m: StaffMention) => ({
+      insights: (parsed.insights ?? []).map((m: ReviewInsight) => ({
         reviewAuthor: m.reviewAuthor ?? "",
         reviewText: m.reviewText ?? "",
         reviewRating: m.reviewRating ?? 0,
         reviewDate: m.reviewDate ?? "",
         sentiment: m.sentiment ?? "positive",
-        staffNames: m.staffNames ?? [],
+        category: m.category ?? "service-quality",
         relevantExcerpt: m.relevantExcerpt ?? "",
         locationName: m.locationName ?? "",
+        allgravyModule: m.allgravyModule ?? CATEGORY_MODULE_MAP[m.category] ?? "Task Management",
       })),
-      namedEmployees: parsed.namedEmployees ?? [],
       positiveCount: parsed.positiveCount ?? 0,
       negativeCount: parsed.negativeCount ?? 0,
       totalReviewsAnalyzed: parsed.totalReviewsAnalyzed ?? reviews.length,
@@ -122,21 +141,23 @@ async function analyzeBatch(
   }
 }
 
-async function runMerge(mentions: StaffMention[]): Promise<{
+async function runMerge(insights: ReviewInsight[]): Promise<{
   headline: string;
   body: string;
-  standoutEmployee: string | null;
+  strengths: string[];
+  opportunities: string[];
+  categoryBreakdown: CategoryBreakdown[];
 }> {
-  const summaryText = mentions
+  const summaryText = insights
     .map(
       (m) =>
-        `[${m.sentiment.toUpperCase()}] ${m.locationName} — "${m.relevantExcerpt}" (staff: ${m.staffNames.join(", ") || "unnamed"})`
+        `[${m.sentiment.toUpperCase()}] ${m.locationName} — "${m.relevantExcerpt}" (category: ${m.category}, module: ${m.allgravyModule})`
     )
     .join("\n");
 
   const mergeMessage = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 512,
+    max_tokens: 1024,
     messages: [{ role: "user", content: MERGE_PROMPT + summaryText }],
   });
 
@@ -150,13 +171,21 @@ async function runMerge(mentions: StaffMention[]): Promise<{
       return {
         headline: parsed.headline ?? "",
         body: parsed.body ?? "",
-        standoutEmployee: parsed.standoutEmployee ?? null,
+        strengths: parsed.strengths ?? [],
+        opportunities: parsed.opportunities ?? [],
+        categoryBreakdown: (parsed.categoryBreakdown ?? []).map((c: CategoryBreakdown) => ({
+          category: c.category ?? "",
+          allgravyModule: c.allgravyModule ?? "",
+          percentage: c.percentage ?? 0,
+          count: c.count ?? 0,
+          sentiment: c.sentiment ?? "mixed",
+        })),
       };
     } catch {
       // fall through
     }
   }
-  return { headline: "", body: "", standoutEmployee: null };
+  return { headline: "", body: "", strengths: [], opportunities: [], categoryBreakdown: [] };
 }
 
 // The 3 Outscraper calls we fire per location, independently
@@ -217,8 +246,7 @@ export async function POST(request: Request) {
           });
         }
 
-        const allMentions: StaffMention[] = [];
-        const allNamedEmployees: string[] = [];
+        const allInsights: ReviewInsight[] = [];
         let totalPositive = 0;
         let totalNegative = 0;
         let totalReviews = 0;
@@ -245,13 +273,12 @@ export async function POST(request: Request) {
                   label: `Haiku batch #${globalIdx}`,
                   startMs: batchStart,
                   endMs: ts(),
-                  detail: `${batch.length} reviews → ${result?.mentions.length ?? 0} mentions (${sort})`,
+                  detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights (${sort})`,
                   parent: `outscraper_${loc.placeId}_${sort}`,
                 });
 
-                if (result && result.mentions.length > 0) {
-                  allMentions.push(...result.mentions);
-                  allNamedEmployees.push(...result.namedEmployees);
+                if (result && result.insights.length > 0) {
+                  allInsights.push(...result.insights);
                   totalPositive += result.positiveCount;
                   totalNegative += result.negativeCount;
                   totalReviews += result.totalReviewsAnalyzed;
@@ -260,14 +287,13 @@ export async function POST(request: Request) {
                     placeId: loc.placeId,
                     displayName: loc.displayName,
                     batchIndex: idx,
-                    mentions: result.mentions,
-                    namedEmployees: result.namedEmployees,
+                    insights: result.insights,
                   });
 
-                  // Fire preliminary merge as soon as we have first mentions (skip in lite)
-                  if (!lite && !preliminaryMergeFired && allMentions.length > 0) {
+                  // Fire preliminary merge as soon as we have first insights (skip in lite)
+                  if (!lite && !preliminaryMergeFired && allInsights.length > 0) {
                     preliminaryMergeFired = true;
-                    const snapshot = [...allMentions];
+                    const snapshot = [...allInsights];
                     const prelimStart = ts();
                     preliminaryMergePromise = runMerge(snapshot).then((merged) => {
                       emit("timing", {
@@ -275,15 +301,14 @@ export async function POST(request: Request) {
                         label: "Preliminary merge (Haiku)",
                         startMs: prelimStart,
                         endMs: ts(),
-                        detail: `${snapshot.length} mentions`,
+                        detail: `${snapshot.length} insights`,
                       });
-                      const prelimAnalysis: StaffAnalysis = {
+                      const prelimAnalysis: ReviewAnalysis = {
                         ...merged,
-                        mentions: snapshot,
+                        insights: snapshot,
                         totalReviewsAnalyzed: totalReviews,
                         positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
                         negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
-                        namedEmployees: [...new Set(snapshot.flatMap((m) => m.staffNames))],
                       };
                       emit("preliminary_analysis", prelimAnalysis);
                     }).catch(() => {});
@@ -380,33 +405,30 @@ export async function POST(request: Request) {
         // Wait for preliminary merge to finish before final merge
         if (preliminaryMergePromise) await preliminaryMergePromise;
 
-        // Final merge with ALL mentions
-        let staffAnalysis: StaffAnalysis | null = null;
+        // Final merge with ALL insights
+        let reviewAnalysis: ReviewAnalysis | null = null;
 
-        if (allMentions.length > 0) {
+        if (allInsights.length > 0) {
           emit("analyzing", {});
           const mergeStart = ts();
-          const merged = await runMerge(allMentions);
+          const merged = await runMerge(allInsights);
           emit("timing", {
             id: "final_merge",
             label: "Final merge (Haiku)",
             startMs: mergeStart,
             endMs: ts(),
-            detail: `${allMentions.length} mentions`,
+            detail: `${allInsights.length} insights`,
           });
 
-          const dedupedEmployees = [...new Set(allNamedEmployees)];
-
-          staffAnalysis = {
+          reviewAnalysis = {
             ...merged,
-            mentions: allMentions,
+            insights: allInsights,
             totalReviewsAnalyzed: totalReviews,
             positiveCount: totalPositive,
             negativeCount: totalNegative,
-            namedEmployees: dedupedEmployees,
           };
 
-          emit("analysis", staffAnalysis);
+          emit("analysis", reviewAnalysis);
         }
 
         // Await place details (skip in lite mode)
@@ -423,14 +445,14 @@ export async function POST(request: Request) {
           label: "Total pipeline",
           startMs: 0,
           endMs: ts(),
-          detail: `${locations.length} locations, ${totalReviews} reviews, ${allMentions.length} mentions`,
+          detail: `${locations.length} locations, ${totalReviews} reviews, ${allInsights.length} insights`,
         });
 
         emit("done", {
           place: locations[0],
           locations,
           locationDetails,
-          staffAnalysis,
+          reviewAnalysis,
         });
       } catch (err) {
         emit("error", { message: String(err) });

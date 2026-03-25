@@ -206,7 +206,7 @@ export function StepConfirmLocations({
         <h1 className="text-[22px] font-bold text-gray-900 tracking-[-0.01em] font-serif">
 Are these all your locations?        </h1>
         <p className="text-[14px] text-gray-500 mt-2 leading-relaxed">
-          We found <span className="font-semibold text-gray-700">{initialLocations.length} locations.</span>. We need all of them to analyze reviews and build your app.
+          We found <span className="font-semibold text-gray-700">{initialLocations.length} locations</span>. We&apos;ll analyze reviews from each to build your personalized app.
         </p>
       </motion.div>
 

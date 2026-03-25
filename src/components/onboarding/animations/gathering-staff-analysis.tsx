@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, ThumbsUp, ThumbsDown } from 'lucide-react';
-import type { StaffMention, StaffAnalysis } from '@/lib/types';
+import type { ReviewInsight, ReviewAnalysis, CategoryBreakdown } from '@/lib/types';
 import type { ReviewItem } from '../types';
 import { SquaresBackground } from './squares-background';
 
 interface GatheringStaffAnalysisProps {
-  mentions: StaffMention[];
-  analysis: StaffAnalysis | null;
+  mentions: ReviewInsight[];
+  analysis: ReviewAnalysis | null;
   reviews: ReviewItem[] | null;
   isActive: boolean;
   onComplete?: () => void;
@@ -21,7 +21,16 @@ interface StatLine {
   long?: boolean;
 }
 
-function buildStats(analysis: StaffAnalysis, mentions: StaffMention[]): StatLine[] {
+const MODULE_ICONS: Record<string, string> = {
+  'Chat & Messaging': 'communication',
+  'Learning & Training': 'training',
+  'Compliance & Safety': 'compliance',
+  'Task Management': 'service-quality',
+  'Scheduling': 'scheduling',
+  'Onboarding': 'onboarding',
+};
+
+function buildStats(analysis: ReviewAnalysis, insights: ReviewInsight[]): StatLine[] {
   const stats: StatLine[] = [];
 
   if (analysis.headline) {
@@ -35,36 +44,45 @@ function buildStats(analysis: StaffAnalysis, mentions: StaffMention[]): StatLine
     });
   }
 
-  if (analysis.namedEmployees.length > 0) {
-    const joined = analysis.namedEmployees.join(', ');
+  // Category breakdown as stats
+  if (analysis.categoryBreakdown.length > 0) {
+    const breakdownText = analysis.categoryBreakdown
+      .sort((a: CategoryBreakdown, b: CategoryBreakdown) => b.percentage - a.percentage)
+      .map((c: CategoryBreakdown) => `${Math.round(c.percentage)}% ${c.category.replace('-', ' ')}`)
+      .join(' · ');
+    stats.push({ label: 'Key Areas', value: breakdownText });
+  }
+
+  // Strengths
+  if (analysis.strengths.length > 0) {
     stats.push({
-      label: 'Named Employees',
-      value: joined,
-      long: joined.length > 100,
+      label: 'Strengths',
+      value: analysis.strengths.join(' · '),
     });
   }
 
-  if (analysis.standoutEmployee) {
-    stats.push({ label: 'Standout Employee', value: analysis.standoutEmployee });
+  // Opportunities
+  if (analysis.opportunities.length > 0) {
+    stats.push({
+      label: 'Opportunities',
+      value: analysis.opportunities.join(' · '),
+    });
   }
-
-  // NOTE: reviews block is inserted here (between standout employee and insight)
-  // via the block builder in the main component — not in this function
 
   if (analysis.body) {
     stats.push({ label: 'Insight', value: analysis.body, long: true });
   }
 
-  // Show up to 3 top mentions as quotes
-  const topMentions = mentions.slice(0, 3);
-  for (const mention of topMentions) {
-    const rawAuthor = mention.reviewAuthor;
+  // Show up to 3 top insights as quotes
+  const topInsights = insights.slice(0, 3);
+  for (const insight of topInsights) {
+    const rawAuthor = insight.reviewAuthor;
     const author = (rawAuthor && rawAuthor !== 'undefined') ? rawAuthor : 'Anonymous';
-    const names = mention.staffNames.length > 0 ? ` — about ${mention.staffNames.join(', ')}` : '';
+    const moduleBadge = insight.allgravyModule ? ` — ${insight.allgravyModule}` : '';
     stats.push({
-      label: `${mention.sentiment === 'positive' ? '★' : '✦'} ${author}${names}`,
-      value: `"${mention.relevantExcerpt}"`,
-      long: mention.relevantExcerpt.length > 100,
+      label: `${insight.sentiment === 'positive' ? '★' : '✦'} ${author}${moduleBadge}`,
+      value: `"${insight.relevantExcerpt}"`,
+      long: insight.relevantExcerpt.length > 100,
     });
   }
 
@@ -72,25 +90,6 @@ function buildStats(analysis: StaffAnalysis, mentions: StaffMention[]): StatLine
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function highlightNames(text: string, names: string[]): React.ReactNode {
-  if (names.length === 0) return text;
-
-  const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = text.split(pattern);
-
-  return parts.map((part, i) => {
-    if (pattern.test(part)) {
-      return (
-        <span key={i} className="font-semibold text-gray-800">
-          {part}
-        </span>
-      );
-    }
-    return part;
-  });
-}
 
 function pickRelevantReviews(reviews: ReviewItem[]): ReviewItem[] {
   const sorted = [...reviews].sort((a, b) => b.rating - a.rating);
@@ -202,11 +201,9 @@ function StatBlock({
 
 function ReviewCards({
   reviews,
-  namedEmployees,
   onDone,
 }: {
   reviews: ReviewItem[];
-  namedEmployees: string[];
   onDone: () => void;
 }) {
   const [revealedCard, setRevealedCard] = useState(-1);
@@ -214,7 +211,6 @@ function ReviewCards({
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
-  // Reveal cards one by one — stable deps to prevent looping
   useEffect(() => {
     const count = reviews.length;
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -223,7 +219,6 @@ function ReviewCards({
       timers.push(setTimeout(() => setRevealedCard(i), 400 + i * 700));
     }
 
-    // Signal done after all cards + a pause
     timers.push(setTimeout(() => {
       if (!doneRef.current) {
         doneRef.current = true;
@@ -279,7 +274,7 @@ function ReviewCards({
                 </div>
               </div>
               <p className="text-[13px] leading-relaxed text-gray-500">
-                {highlightNames(displayText, namedEmployees)}
+                {displayText}
               </p>
             </motion.div>
           );
@@ -302,11 +297,10 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
   const isDataReady = analysis !== null;
   const relevantReviews = reviews ? pickRelevantReviews(reviews) : [];
 
-  // Build blocks: insert reviews between standout employee and insight
+  // Build blocks: insert reviews between opportunities and insight
   const blocks: Array<{ kind: 'stat'; stat: StatLine } | { kind: 'reviews' }> = [];
   if (isDataReady) {
     const stats = buildStats(analysis, mentions);
-    // Find where Insight starts — insert reviews before it
     const insightIdx = stats.findIndex((s) => s.label === 'Insight');
     const insertAt = insightIdx >= 0 ? insightIdx : stats.length;
 
@@ -316,7 +310,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
       }
       blocks.push({ kind: 'stat', stat: stats[si] });
     }
-    // If insert point was at the end
     if (insertAt >= stats.length && relevantReviews.length > 0) {
       blocks.push({ kind: 'reviews' });
     }
@@ -324,19 +317,16 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
 
   const isEmpty = isDataReady && mentions.length === 0 && !analysis.headline;
 
-  // Transition from loading to stats when data arrives
   useEffect(() => {
     if (!isActive || !isDataReady || phase !== 'loading') return;
     const timer = setTimeout(() => setPhase('stats'), 800);
     return () => clearTimeout(timer);
   }, [isActive, isDataReady, phase]);
 
-  // Advance to the next block
   const advanceBlock = useCallback(() => {
     setRevealedIndex((prev) => prev + 1);
   }, []);
 
-  // Fire onComplete 2 seconds after all blocks have been revealed
   useEffect(() => {
     if (blocks.length === 0 || revealedIndex < blocks.length) return;
     if (completeCalledRef.current) return;
@@ -351,7 +341,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
     return () => clearTimeout(timer);
   }, [revealedIndex, blocks.length, onComplete]);
 
-  // Start slow auto-scroll once we're a few blocks in
   const startAutoScroll = useCallback(() => {
     if (scrollingRef.current) return;
     scrollingRef.current = true;
@@ -368,7 +357,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
     rafRef.current = requestAnimationFrame(scroll);
   }, []);
 
-  // Clean up auto-scroll
   useEffect(() => {
     return () => {
       scrollingRef.current = false;
@@ -376,7 +364,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
     };
   }, []);
 
-  // Start scrolling after a few blocks are revealed
   useEffect(() => {
     if (phase !== 'stats') return;
     if (revealedIndex >= 3) {
@@ -390,7 +377,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
       ref={scrollRef}
       className="w-full h-full overflow-y-auto overflow-x-hidden scroll-smooth relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
     >
-      {/* Grid background — visible during loading */}
       <AnimatePresence>
         {phase === 'loading' && (
           <motion.div
@@ -409,7 +395,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
         )}
       </AnimatePresence>
 
-      {/* Loading state */}
       <AnimatePresence>
         {phase === 'loading' && (
           <motion.div
@@ -434,21 +419,19 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
                 </h2>
               </div>
               <p className="text-sm text-gray-400">
-                Extracting key insights from customer feedback...
+                Extracting operational insights from customer feedback...
               </p>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Empty state */}
       {phase === 'stats' && isEmpty && (
         <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <span className="text-sm text-gray-400">No staff mentions found</span>
+          <span className="text-sm text-gray-400">No operational insights found</span>
         </div>
       )}
 
-      {/* Sequential reveal of blocks */}
       <AnimatePresence>
         {phase === 'stats' && !isEmpty && blocks.length > 0 && (
           <motion.div
@@ -469,13 +452,11 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
                     <ReviewCards
                       key="review-cards"
                       reviews={relevantReviews}
-                      namedEmployees={isDataReady ? analysis.namedEmployees : []}
                       onDone={isActiveBlock ? advanceBlock : () => {}}
                     />
                   );
                 }
 
-                // Completed stat blocks render as static text
                 if (!isActiveBlock) {
                   return (
                     <div key={`done-${block.stat.label}`}>
@@ -489,7 +470,6 @@ export function GatheringStaffAnalysis({ mentions, analysis, reviews, isActive, 
                   );
                 }
 
-                // Active stat block — animated
                 return (
                   <StatBlock
                     key={`active-${block.stat.label}`}

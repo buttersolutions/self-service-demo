@@ -11,7 +11,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { CompanyInsight } from "@/lib/saber";
+interface CompanyInsight {
+  label: string;
+  answer: string | number | boolean | string[] | null;
+  answerType?: string;
+  confidence?: number;
+  error?: string;
+  sources?: Array<{ url: string; title?: string }>;
+}
 
 interface CompanyInsightsProps {
   domain: string;

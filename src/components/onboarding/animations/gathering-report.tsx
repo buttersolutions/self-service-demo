@@ -2,9 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { CompanyInsight } from '@/lib/saber';
 import type { WaterfallCompany, WaterfallPerson } from '@/lib/waterfall';
 import { SquaresBackground } from './squares-background';
+
+interface CompanyInsight {
+  label: string;
+  answer: string | string[] | null;
+  error?: boolean;
+}
 
 interface GatheringReportProps {
   insights: CompanyInsight[] | null;

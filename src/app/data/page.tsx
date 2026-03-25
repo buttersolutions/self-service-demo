@@ -7,7 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import type { CollectResponse } from "@/app/api/data/collect/route";
 import type { RunSummary } from "@/app/api/data/runs/route";
 import { LocationAutocomplete } from "@/components/demo/location-autocomplete";
-import type { PlaceSummary, PlaceDetails, StaffMention, StaffAnalysis, ScanResult } from "@/lib/types";
+import type { PlaceSummary, PlaceDetails, ReviewInsight, ReviewAnalysis, ScanResult } from "@/lib/types";
+
+// Legacy aliases — this test harness still uses the old naming
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StaffMention = ReviewInsight & { staffNames?: string[]; namedEmployees?: string[] };
+type StaffAnalysis = ReviewAnalysis & { standoutEmployee?: string | null; namedEmployees?: string[]; mentions?: StaffMention[] };
 import type { ScanRunSummary, ScanRunDetail } from "@/app/api/data/scan-runs/route";
 import type { StrategyResult } from "@/app/api/data/chain-discovery/route";
 import type { ChainRunSummary, ChainRunDetail } from "@/app/api/data/chain-discovery-runs/route";
@@ -425,11 +430,7 @@ function ResultView({
           </thead>
           <tbody>
             <Row label="Total" duration={result.totalDurationMs} />
-            <Row
-              label={`Saber (${result.pipelines.saber.completedCount}/${result.pipelines.saber.signalCount} signals)`}
-              status={result.pipelines.saber.status}
-              duration={result.pipelines.saber.durationMs}
-            />
+            {/* Saber removed */}
             <Row
               label={`Google Places (${result.pipelines.googlePlaces.data?.locations.length ?? 0} locations)`}
               status={result.pipelines.googlePlaces.status}
@@ -644,69 +645,7 @@ function ResultView({
         )}
       </Section>
 
-      {/* --- Saber Signals --- */}
-      <Section
-        title={`Saber Signals (${result.pipelines.saber.completedCount}/${result.pipelines.saber.signalCount})`}
-        defaultOpen
-      >
-        {result.pipelines.saber.status === "error" ? (
-          <Err msg={result.pipelines.saber.error} />
-        ) : (
-          <div className="space-y-4">
-            {(result.pipelines.saber.data ?? []).map((signal) => (
-              <div
-                key={signal.label}
-                className="border-b border-dashed pb-3"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">{signal.label}</span>
-                  {signal.confidence != null && (
-                    <ConfidenceBadge confidence={signal.confidence} />
-                  )}
-                  {signal.durationMs != null && (
-                    <span className="text-xs text-muted-foreground">
-                      {(signal.durationMs / 1000).toFixed(1)}s
-                    </span>
-                  )}
-                  {signal.error && (
-                    <Badge variant="destructive" className="text-xs">
-                      error
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Q: {signal.question}
-                </p>
-                {signal.error ? (
-                  <p className="text-xs text-destructive">{signal.error}</p>
-                ) : (
-                  <SignalAnswer signal={signal} />
-                )}
-                {signal.reasoning && (
-                  <p className="text-xs text-muted-foreground mt-1 italic">
-                    {signal.reasoning}
-                  </p>
-                )}
-                {signal.sources && signal.sources.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {signal.sources.map((src, i) => (
-                      <a
-                        key={i}
-                        href={src.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs underline text-muted-foreground hover:text-foreground"
-                      >
-                        {src.title || src.url}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+      {/* Saber removed */}
 
       {/* --- Google Places: Locations --- */}
       <Section
@@ -1460,13 +1399,13 @@ function GoogleMapsTab() {
                           </p>
                         )}
                       </div>
-                      {viewResult.staffAnalysis.namedEmployees.length > 0 && (
+                      {(viewResult.staffAnalysis.namedEmployees?.length ?? 0) > 0 && (
                         <div className="mt-3">
                           <h4 className="text-xs font-semibold mb-1">Named Employees</h4>
                           <div className="flex flex-wrap gap-1.5">
-                            {viewResult.staffAnalysis.namedEmployees.map((name) => {
-                              const count = viewResult.staffAnalysis!.mentions.filter((m) =>
-                                m.staffNames.includes(name)
+                            {(viewResult.staffAnalysis.namedEmployees ?? []).map((name) => {
+                              const count = (viewResult.staffAnalysis!.mentions ?? []).filter((m) =>
+                                (m.staffNames ?? []).includes(name)
                               ).length;
                               return (
                                 <Badge key={name} variant="secondary" className="text-xs">
@@ -1496,9 +1435,9 @@ function GoogleMapsTab() {
                               </Badge>
                               <span className="font-semibold">{m.reviewAuthor}</span>
                               <span className="text-muted-foreground">{m.locationName}</span>
-                              {m.staffNames.length > 0 && (
+                              {(m.staffNames?.length ?? 0) > 0 && (
                                 <span className="text-primary font-semibold">
-                                  [{m.staffNames.join(", ")}]
+                                  [{(m.staffNames ?? []).join(", ")}]
                                 </span>
                               )}
                             </div>
@@ -2211,9 +2150,9 @@ function GoogleMapsTab() {
                         </Badge>
                         <span className="font-semibold">{m.reviewAuthor}</span>
                         <span className="text-muted-foreground">{m.locationName}</span>
-                        {m.staffNames.length > 0 && (
+                        {(m.staffNames?.length ?? 0) > 0 && (
                           <span className="text-primary font-semibold">
-                            [{m.staffNames.join(", ")}]
+                            [{(m.staffNames ?? []).join(", ")}]
                           </span>
                         )}
                       </div>
@@ -2247,7 +2186,7 @@ function GoogleMapsTab() {
                   <StatCard label="Reviews So Far" value={prelimAnalysis.totalReviewsAnalyzed} />
                   <StatCard label="Positive" value={prelimAnalysis.positiveCount} />
                   <StatCard label="Negative" value={prelimAnalysis.negativeCount} />
-                  <StatCard label="Named Employees" value={prelimAnalysis.namedEmployees.length} />
+                  <StatCard label="Named Employees" value={prelimAnalysis.namedEmployees?.length ?? 0} />
                 </div>
               </div>
             </Section>
@@ -2277,17 +2216,17 @@ function GoogleMapsTab() {
                   <StatCard label="Reviews Analyzed" value={staffAnalysis.totalReviewsAnalyzed} />
                   <StatCard label="Positive" value={staffAnalysis.positiveCount} />
                   <StatCard label="Negative" value={staffAnalysis.negativeCount} />
-                  <StatCard label="Named Employees" value={staffAnalysis.namedEmployees.length} />
+                  <StatCard label="Named Employees" value={staffAnalysis.namedEmployees?.length ?? 0} />
                   <StatCard label="Locations" value={locationDetails.length} />
                 </div>
 
-                {staffAnalysis.namedEmployees.length > 0 && (
+                {(staffAnalysis.namedEmployees?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="text-xs font-semibold mb-1">Named Employees</h4>
                     <div className="flex flex-wrap gap-1.5">
-                      {staffAnalysis.namedEmployees.map((name) => {
-                        const count = staffAnalysis.mentions.filter((m) =>
-                          m.staffNames.includes(name)
+                      {(staffAnalysis.namedEmployees ?? []).map((name) => {
+                        const count = (staffAnalysis.mentions ?? []).filter((m) =>
+                          (m.staffNames ?? []).includes(name)
                         ).length;
                         return (
                           <Badge key={name} variant="secondary" className="text-xs">

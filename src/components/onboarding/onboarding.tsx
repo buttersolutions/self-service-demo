@@ -13,7 +13,7 @@ import {
   StepDone,
 } from './steps';
 import type { FetchTiming, LocationItem, ReviewItem, Step } from './types';
-import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, StaffMention, StaffAnalysis } from '@/lib/types';
+import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, ReviewInsight, ReviewAnalysis } from '@/lib/types';
 import { OnboardingProvider, useOnboarding } from '@/lib/demo-flow-context';
 
 const IGNORED_TYPES = new Set([
@@ -76,23 +76,6 @@ function OnboardingInner() {
   };
 
   const startBackgroundFetch = useCallback((domain: string) => {
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'insights', label: 'Saber Insights' } });
-    fetch('/api/company/insights', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain }),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
-        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { insights: data.insights ?? [] } });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'insights', status: 'done' } });
-      })
-      .catch((err: unknown) => {
-        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { insights: [] } });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'insights', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
-      });
-
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'enrich', label: 'Waterfall Enrich' } });
     fetch('/api/company/enrich', {
       method: 'POST',
@@ -186,7 +169,12 @@ function OnboardingInner() {
         };
       });
 
-      dispatch({ type: 'SET_LOCATIONS', payload: chainLocations });
+      const selectedCountry = place.countryCode;
+      const filteredLocations = selectedCountry
+        ? chainLocations.filter(loc => loc.countryCode === selectedCountry)
+        : chainLocations;
+
+      dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
       domainRef.current = domain;
 
       dispatch({
@@ -196,6 +184,9 @@ function OnboardingInner() {
           logoUrl: brandResult.logoUrl ?? null,
           domain: domain ?? '',
           brandColors: brandResult.colors ?? ['#FFFFFF'],
+          fonts: brandResult.fonts ?? [],
+          ogImage: brandResult.ogImage ?? null,
+          websiteImages: brandResult.websiteImages ?? [],
         },
       });
 
@@ -256,7 +247,7 @@ function OnboardingInner() {
     [business, startBackgroundFetch, dispatch],
   );
 
-  const startStaffAnalysisFetch = useCallback((confirmedLocs: LocationItem[]) => {
+  const startReviewAnalysisFetch = useCallback((confirmedLocs: LocationItem[]) => {
     const places: PlaceSummary[] = confirmedLocs.map((loc) => ({
       placeId: loc.id,
       displayName: loc.name,
@@ -264,7 +255,7 @@ function OnboardingInner() {
       location: { lat: loc.lat, lng: loc.lng },
     }));
 
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'staffAnalysis', label: 'Staff Analysis (SSE)' } });
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviewAnalysis', label: 'Review Analysis (SSE)' } });
 
     fetch('/api/demo/scan/analyze?lite=1', {
       method: 'POST',
@@ -273,13 +264,13 @@ function OnboardingInner() {
     })
       .then(async (res) => {
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `connected (${res.status})` } });
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `connected (${res.status})` } });
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let currentEvent = '';
-        let mentionCount = 0;
+        let insightCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -310,73 +301,75 @@ function OnboardingInner() {
               try {
                 const data = JSON.parse(eventData);
                 if (eventName === 'batch_analysis') {
-                  const mentions = data.mentions as StaffMention[];
-                  mentionCount += mentions.length;
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `batch_analysis: +${mentions.length} mentions (total: ${mentionCount})` } });
-                  dispatch({ type: 'APPEND_STAFF_MENTIONS', payload: mentions });
+                  const insights = data.insights as ReviewInsight[];
+                  insightCount += insights.length;
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
+                  dispatch({ type: 'APPEND_REVIEW_INSIGHTS', payload: insights });
                 } else if (eventName === 'analysis') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `analysis: final (${data.mentions?.length ?? 0} mentions)` } });
-                  const analysis = data as StaffAnalysis;
-                  dispatch({ type: 'SET_STAFF_ANALYSIS', payload: analysis });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `analysis: final (${data.insights?.length ?? 0} insights)` } });
+                  const analysis = data as ReviewAnalysis;
+                  dispatch({ type: 'SET_REVIEW_ANALYSIS', payload: analysis });
                 } else if (eventName === 'error') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
                 } else if (eventName === 'timing') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `timing: ${data.label} (${data.detail ?? ''})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `timing: ${data.label} (${data.detail ?? ''})` } });
                 } else if (eventName === 'reviews_progress') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
                 } else if (eventName === 'done') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: 'done' } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: 'done' } });
                 } else {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `${eventName}` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `${eventName}` } });
                 }
               } catch {
-                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `parse-error: ${eventName}` } });
+                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: `parse-error: ${eventName}` } });
               }
             }
           }
         }
 
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: 'stream closed' } });
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'reviewAnalysis', event: 'stream closed' } });
 
         // Set fallback analysis only if no analysis event was received
         dispatch({
-          type: 'SET_STAFF_ANALYSIS_FALLBACK',
+          type: 'SET_REVIEW_ANALYSIS_FALLBACK',
           payload: {
             headline: '',
             body: '',
-            standoutEmployee: null,
-            mentions: [],
+            insights: [],
             totalReviewsAnalyzed: 0,
             positiveCount: 0,
             negativeCount: 0,
-            namedEmployees: [],
+            categoryBreakdown: [],
+            strengths: [],
+            opportunities: [],
           },
         });
 
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'staffAnalysis', status: 'done' } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviewAnalysis', status: 'done' } });
       })
       .catch((err: unknown) => {
         dispatch({
-          type: 'SET_STAFF_ANALYSIS',
+          type: 'SET_REVIEW_ANALYSIS',
           payload: {
             headline: '',
             body: '',
-            standoutEmployee: null,
-            mentions: [],
+            insights: [],
             totalReviewsAnalyzed: 0,
             positiveCount: 0,
             negativeCount: 0,
-            namedEmployees: [],
+            categoryBreakdown: [],
+            strengths: [],
+            opportunities: [],
           },
         });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'staffAnalysis', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviewAnalysis', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
       });
   }, [dispatch]);
 
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
     startReviewsFetch(confirmedLocs.map((l) => l.id));
-    startStaffAnalysisFetch(confirmedLocs);
-  }, [startReviewsFetch, startStaffAnalysisFetch]);
+    startReviewAnalysisFetch(confirmedLocs);
+  }, [startReviewsFetch, startReviewAnalysisFetch]);
 
   const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
     dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
