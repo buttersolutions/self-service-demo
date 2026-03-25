@@ -20,22 +20,24 @@ interface ReviewForAnalysis {
 }
 
 const CATEGORY_MODULE_MAP: Record<string, string> = {
-  communication: "Chat & Messaging",
-  training: "Learning & Training",
-  compliance: "Compliance & Safety",
-  "service-quality": "Task Management",
-  scheduling: "Scheduling",
-  onboarding: "Onboarding",
+  "internal-comms": "Chat & Newsfeed",
+  "learning-development": "Learning & Development",
+  "compliance-training": "Compliance & Safety",
+  "operations": "To-Do's & Handbooks",
+  "onboarding": "Onboarding",
+  "people-management": "People & HRIS",
 };
 
-const PER_LOCATION_PROMPT = `Analyze these customer reviews for operational insights. Categorize each review that mentions service quality, communication, training, compliance, scheduling, or onboarding issues.
+const PER_LOCATION_PROMPT = `Analyze these customer reviews to find insights that map to internal operational systems. You are looking for signals that indicate whether the business needs better:
 
-For each relevant review, identify:
-1. The category of issue/praise: communication, training, compliance, service-quality, scheduling, or onboarding
-2. Which Allgravy module addresses it: Chat & Messaging, Learning & Training, Compliance & Safety, Task Management, Scheduling, or Onboarding
-3. Whether the sentiment is positive (things going well) or negative (problem area)
+1. **Internal Communications** (category: "internal-comms", module: "Chat & Newsfeed") — staff miscommunication, orders wrong, information not passed between shifts, front-of-house/back-of-house disconnect
+2. **Learning & Development** (category: "learning-development", module: "Learning & Development") — untrained staff, inconsistent service, knowledge gaps, staff not knowing menu/products, new hire struggles
+3. **Compliance & Safety Training** (category: "compliance-training", module: "Compliance & Safety") — hygiene issues, safety concerns, food handling, allergen mistakes, regulatory issues
+4. **Operations & Task Management** (category: "operations", module: "To-Do's & Handbooks") — slow service, things forgotten, inconsistent standards across locations, process breakdowns, missing items
+5. **Onboarding** (category: "onboarding", module: "Onboarding") — clearly new/inexperienced staff, staff unsure of procedures, first-day mistakes
+6. **People Management** (category: "people-management", module: "People & HRIS") — understaffing, high turnover signals, overworked staff, management issues, team morale
 
-IMPORTANT: Include BOTH positive and negative reviews. Show what's working well AND what needs improvement. Skip reviews that are purely about food quality, decor, or prices with no operational/service angle.
+Include BOTH positive (well-run operations, great teamwork, well-trained staff) and negative reviews. Skip reviews purely about food taste, decor, or prices with no operational angle.
 
 Return valid JSON:
 {
@@ -46,7 +48,7 @@ Return valid JSON:
       "reviewRating": number (1-5),
       "reviewDate": string,
       "sentiment": "positive" | "negative",
-      "category": "communication" | "training" | "compliance" | "service-quality" | "scheduling" | "onboarding",
+      "category": "internal-comms" | "learning-development" | "compliance-training" | "operations" | "onboarding" | "people-management",
       "relevantExcerpt": string (the specific sentence about the operational issue),
       "locationName": string,
       "allgravyModule": string
@@ -62,11 +64,19 @@ Reviews:
 
 const MERGE_PROMPT = `You have review analysis from multiple locations of the same business. Create a unified summary.
 
+The categories map to Allgravy's internal systems platform:
+- "internal-comms" → Chat & Newsfeed (team communication)
+- "learning-development" → Learning & Development (LMS, training courses)
+- "compliance-training" → Compliance & Safety (compliance tracking, safety training)
+- "operations" → To-Do's & Handbooks (task management, SOPs)
+- "onboarding" → Onboarding (new hire programs)
+- "people-management" → People & HRIS (staffing, retention)
+
 Rules:
 - headline: Max 12 words. Lead with what's working well, hint at what could improve. Punchy and specific to this business.
-- body: 2-3 sentences. First acknowledge strengths, then frame problems as opportunities. Actionable and solvable.
+- body: 2-3 sentences. First acknowledge strengths, then frame problems as opportunities that Allgravy's platform solves. Be specific about which modules help.
 - strengths: Top 2-3 things customers love about service/operations (short phrases, not full sentences)
-- opportunities: Top 2-3 problem areas that map to Allgravy modules (short phrases)
+- opportunities: Top 2-3 problem areas phrased as what the Allgravy module would fix (e.g. "Shift handover communication via Chat & Newsfeed", "Service consistency via Learning & Development")
 - categoryBreakdown: For each category found, calculate percentage of total insights and dominant sentiment.
 
 Return valid JSON:

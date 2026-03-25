@@ -19,7 +19,8 @@
       "WebFetch(domain:notes.granola.ai)",
       "mcp__claude_ai_Granola__get_meeting_transcript",
       "WebFetch(domain:apify.com)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:allgravy.com)"
     ]
   }
 }

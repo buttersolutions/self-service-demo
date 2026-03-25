@@ -136,27 +136,27 @@ export function StepGathering({
     }
   }, [currentPhaseIndex]);
 
-  // Auto-transition from reviews sub-phase to analysis sub-phase after 20s
+  // Auto-transition from reviews sub-phase to analysis sub-phase after 8s
   useEffect(() => {
     if (currentPhase.id !== 'reviews-analysis' || reviewsSubPhase !== 'reviews') return;
     if (!autoAdvance) return;
 
     reviewsTimerRef.current = setTimeout(() => {
       setReviewsSubPhase('analysis');
-    }, 20000);
+    }, 8000);
 
     return () => {
       if (reviewsTimerRef.current) clearTimeout(reviewsTimerRef.current);
     };
   }, [currentPhase.id, reviewsSubPhase, autoAdvance]);
 
-  // If analysis data arrives early and we've been in reviews for at least 15s, switch to analysis
+  // If analysis data arrives early and we've been in reviews for at least 5s, switch to analysis
   useEffect(() => {
     if (currentPhase.id !== 'reviews-analysis' || reviewsSubPhase !== 'reviews') return;
     if (!gatheringData.reviewAnalysis) return;
 
     const elapsed = Date.now() - phaseStartRef.current;
-    if (elapsed >= 15000) {
+    if (elapsed >= 5000) {
       setReviewsSubPhase('analysis');
     }
   }, [currentPhase.id, reviewsSubPhase, gatheringData.reviewAnalysis]);
