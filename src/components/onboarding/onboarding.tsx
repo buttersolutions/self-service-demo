@@ -242,6 +242,20 @@ function OnboardingInner() {
 
     const domain = extractDomain(place.websiteUri);
 
+    // Fire primary location review scrape immediately (parallel with everything else)
+    const primaryLoc: LocationItem = {
+      id: place.placeId,
+      name: place.displayName,
+      address: place.formattedAddress,
+      countryCode: place.countryCode,
+      lat: place.location.lat,
+      lng: place.location.lng,
+      userRatingCount: place.userRatingCount,
+      rating: place.rating,
+    };
+    startReviewsFetch([place.placeId]);
+    startReviewAnalysisFetch([primaryLoc]);
+
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
 
@@ -358,7 +372,7 @@ function OnboardingInner() {
     } catch {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [dispatch]);
+  }, [dispatch, startReviewsFetch, startReviewAnalysisFetch]);
 
   const handleBusinessConfirm = useCallback(
     (data: { name: string; website: string; colors: string[] }) => {
@@ -372,25 +386,9 @@ function OnboardingInner() {
       const domain = domainRef.current ?? data.website;
       startBackgroundFetch(domain);
 
-      // Phase 1: Start scraping primary location immediately on business confirm
-      if (selectedPlace) {
-        const primaryLoc: LocationItem = {
-          id: selectedPlace.placeId,
-          name: selectedPlace.displayName,
-          address: selectedPlace.formattedAddress,
-          countryCode: selectedPlace.countryCode,
-          lat: selectedPlace.location.lat,
-          lng: selectedPlace.location.lng,
-          userRatingCount: selectedPlace.userRatingCount,
-          rating: selectedPlace.rating,
-        };
-        startReviewsFetch([selectedPlace.placeId]);
-        startReviewAnalysisFetch([primaryLoc]);
-      }
-
       goForward('confirm-locations');
     },
-    [business, startBackgroundFetch, selectedPlace, startReviewsFetch, startReviewAnalysisFetch, dispatch],
+    [business, startBackgroundFetch, dispatch],
   );
 
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
