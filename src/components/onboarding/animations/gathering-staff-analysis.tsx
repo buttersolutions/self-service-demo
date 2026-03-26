@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, ThumbsUp, ThumbsDown, TrendingUp, AlertTriangle, Loader2, Search } from 'lucide-react';
 import type { ReviewInsight, ReviewAnalysis, CategoryBreakdown } from '@/lib/types';
 import type { ReviewItem, ReviewProgressEvent } from '../types';
-import { SquaresBackground } from './squares-background';
 
 interface GatheringStaffAnalysisProps {
   mentions: ReviewInsight[];
@@ -69,8 +68,6 @@ function TypewriterText({
   );
 }
 
-// ── Progress card (live status during loading) ──────────────────────
-
 function ProgressCard({ text, icon }: { text: string; icon: 'search' | 'insight' | 'loading' }) {
   const Icon = icon === 'search' ? Search : icon === 'insight' ? TrendingUp : Loader2;
   return (
@@ -88,7 +85,22 @@ function ProgressCard({ text, icon }: { text: string; icon: 'search' | 'insight'
   );
 }
 
-// ── Strength card ───────────────────────────────────────────────────
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          className={`size-3 ${
+            i < rating
+              ? 'fill-amber-400 text-amber-400'
+              : 'fill-gray-200 text-gray-200'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
 
 function StrengthCard({ strength, quote, index }: { strength: string; quote?: string; index: number }) {
   return (
@@ -110,8 +122,6 @@ function StrengthCard({ strength, quote, index }: { strength: string; quote?: st
     </motion.div>
   );
 }
-
-// ── Issue card ──────────────────────────────────────────────────────
 
 function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdown; insights: ReviewInsight[]; index: number }) {
   const relevantInsights = insights
@@ -144,7 +154,6 @@ function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdow
         </div>
       </div>
 
-      {/* Mini progress bar */}
       <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
         <motion.div
           className="h-full rounded-full bg-amber-400"
@@ -172,21 +181,101 @@ function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdow
   );
 }
 
+// ── Review card for the initial reviews phase ───────────────────────
+
+function ReviewCard({ review, index }: { review: ReviewItem; index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9, y: -10 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 28, delay: index * 0.15 }}
+      className="bg-white rounded-2xl p-4 border border-gray-100"
+      style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.03)' }}
+    >
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="size-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-500 shrink-0">
+          {(review.author ?? '?').charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-[13px] font-medium text-gray-700 block truncate">
+            {review.author ?? 'Anonymous'}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <StarRating rating={review.rating} />
+            {review.rating >= 4 ? (
+              <ThumbsUp className="size-3.5 text-green-400" />
+            ) : review.rating <= 2 ? (
+              <ThumbsDown className="size-3.5 text-red-400" />
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <p className="text-[13px] leading-relaxed text-gray-500 line-clamp-3">
+        {review.text}
+      </p>
+    </motion.div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────
 
+type Phase = 'reviews' | 'analyzing' | 'results';
+
 export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, reviews, progress, isActive, onComplete }: GatheringStaffAnalysisProps) {
-  const [phase, setPhase] = useState<'loading' | 'results'>('loading');
+  const [phase, setPhase] = useState<Phase>('reviews');
   const scrollRef = useRef<HTMLDivElement>(null);
   const completeCalledRef = useRef(false);
-  const [resultsRevealed, setResultsRevealed] = useState(false);
+  const mountedAtRef = useRef(Date.now());
+  const [visibleReviewCount, setVisibleReviewCount] = useState(0);
 
   const isDataReady = analysis !== null;
+  const reviewList = reviews ?? [];
 
-  // Build live progress messages from progress events + insights
+  // Phase 1 → 2: Show review cards for 6s, then collapse into analyzing
+  useEffect(() => {
+    if (phase !== 'reviews' || !isActive) return;
+    const timer = setTimeout(() => setPhase('analyzing'), 6000);
+    return () => clearTimeout(timer);
+  }, [phase, isActive]);
+
+  // Stagger review card reveals during phase 1
+  useEffect(() => {
+    if (phase !== 'reviews' || !isActive) return;
+    const max = Math.min(reviewList.length, 6);
+    if (visibleReviewCount >= max) return;
+    const timer = setTimeout(() => {
+      setVisibleReviewCount((prev) => prev + 1);
+    }, visibleReviewCount === 0 ? 300 : 800);
+    return () => clearTimeout(timer);
+  }, [phase, isActive, visibleReviewCount, reviewList.length]);
+
+  // Phase 2 → 3: Transition to results when final analysis arrives
+  useEffect(() => {
+    if (phase !== 'analyzing' || !isDataReady) return;
+    // Small delay so the last progress cards are visible
+    const timer = setTimeout(() => setPhase('results'), 800);
+    return () => clearTimeout(timer);
+  }, [phase, isDataReady]);
+
+  // If analysis arrives while still in reviews phase, go to analyzing first (don't skip)
+  useEffect(() => {
+    if (phase !== 'reviews' || !isDataReady) return;
+    // Data arrived fast — still show reviews for a bit, then go through analyzing briefly
+    const elapsed = Date.now() - mountedAtRef.current;
+    const remaining = Math.max(0, 4000 - elapsed);
+    const timer = setTimeout(() => setPhase('analyzing'), remaining);
+    return () => clearTimeout(timer);
+  }, [phase, isDataReady]);
+
+  // Preview data from incremental Sonnet merges
+  const previewHeadline = analysisPreview?.headline;
+  const previewStrengths = analysisPreview?.strengths ?? [];
+  const previewOpportunities = analysisPreview?.opportunities ?? [];
+
+  // Build progress messages
   const progressMessages = React.useMemo(() => {
     const msgs: Array<{ text: string; icon: 'search' | 'insight' | 'loading' }> = [];
-
-    // Dedupe progress by placeId (show latest count per location)
     const byLocation = new Map<string, ReviewProgressEvent>();
     for (const p of progress) {
       byLocation.set(p.placeId, p);
@@ -194,45 +283,18 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
     for (const p of byLocation.values()) {
       msgs.push({ text: `Collected ${p.reviewCount} reviews from ${p.displayName}`, icon: 'search' });
     }
-
-    // Insight count
     if (mentions.length > 0) {
       const categories = new Set(mentions.map((m) => m.category));
       msgs.push({ text: `Found ${mentions.length} insights across ${categories.size} categories`, icon: 'insight' });
     }
-
-    // Show analyzing indicator if we have progress but no final analysis yet
     if (progress.length > 0 && !analysis) {
       msgs.push({ text: 'Running analysis...', icon: 'loading' });
     }
-
     return msgs;
   }, [progress, mentions, analysis]);
 
-  // Preview headline from incremental Sonnet merges (shown on loading screen)
-  const previewHeadline = analysisPreview?.headline;
-  const previewStrengths = analysisPreview?.strengths ?? [];
-  const previewOpportunities = analysisPreview?.opportunities ?? [];
-
-  // Stay on loading screen until the FINAL analysis arrives — no timer.
-  // The loading screen IS the experience while the pipeline runs.
-  useEffect(() => {
-    if (!isActive || !isDataReady || phase !== 'loading') return;
-    setPhase('results');
-  }, [isActive, isDataReady, phase]);
-
-  // Reveal results with a short delay
-  useEffect(() => {
-    if (phase !== 'results') return;
-    const timer = setTimeout(() => setResultsRevealed(true), 300);
-    return () => clearTimeout(timer);
-  }, [phase]);
-
   const isEmpty = isDataReady && mentions.length === 0 && !analysis.headline;
-
-  // Get positive insights for strength quotes
   const positiveInsights = mentions.filter((m) => m.sentiment === 'positive');
-  // Sort issues by percentage
   const sortedBreakdown = analysis?.categoryBreakdown
     ?.filter((c) => c.sentiment !== 'mostly-positive')
     .sort((a, b) => b.percentage - a.percentage) ?? [];
@@ -240,41 +302,46 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
   return (
     <div
       ref={scrollRef}
-      className="w-full h-full overflow-y-auto overflow-x-hidden scroll-smooth relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      className="w-full h-full overflow-y-auto overflow-x-hidden relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
     >
-      {/* Grid background — visible during loading */}
+      {/* ── Phase 1: Review Cards ────────────────────────────────── */}
       <AnimatePresence>
-        {phase === 'loading' && (
+        {phase === 'reviews' && (
           <motion.div
-            className="absolute inset-0 z-0"
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.8 }}
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center px-8"
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.5 }}
           >
-            <SquaresBackground
-              direction="diagonal"
-              speed={0.3}
-              borderColor="rgba(98, 92, 228, 0.08)"
-              squareSize={40}
-              hoverFillColor="rgba(98, 92, 228, 0.04)"
-            />
+            <motion.h2
+              className="text-xl font-light text-gray-800 font-serif tracking-tight mb-6"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              Reading your reviews...
+            </motion.h2>
+            <div className="w-full max-w-lg space-y-3">
+              <AnimatePresence>
+                {reviewList.slice(0, visibleReviewCount).map((review, i) => (
+                  <ReviewCard key={`review-${i}`} review={review} index={0} />
+                ))}
+              </AnimatePresence>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Loading state — live progress cards */}
+      {/* ── Phase 2: Analyzing (progress cards + preview) ────────── */}
       <AnimatePresence>
-        {phase === 'loading' && (
+        {phase === 'analyzing' && (
           <motion.div
             className="absolute inset-0 z-10 flex flex-col items-center justify-center px-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.5 }}
           >
-            <motion.div
-              className="w-full max-w-md"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.5 }}
-            >
+            <motion.div className="w-full max-w-md">
               <div className="flex items-center gap-3 mb-6">
                 <motion.div
                   className="size-2.5 rounded-full bg-[#625CE4]"
@@ -287,36 +354,40 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
               </div>
 
               {/* Preview headline from incremental merges */}
-              {previewHeadline && (
-                <motion.div
-                  className="mb-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-100 shadow-sm"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <div className="text-lg font-serif text-gray-800 leading-snug mb-2">
-                    {previewHeadline}
-                  </div>
-                  {previewStrengths.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-1.5">
-                      {previewStrengths.map((s, i) => (
-                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          {s}
-                        </span>
-                      ))}
+              <AnimatePresence mode="wait">
+                {previewHeadline && (
+                  <motion.div
+                    key={previewHeadline}
+                    className="mb-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-100 shadow-sm"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <div className="text-lg font-serif text-gray-800 leading-snug mb-2">
+                      {previewHeadline}
                     </div>
-                  )}
-                  {previewOpportunities.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {previewOpportunities.map((o, i) => (
-                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                          {o}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              )}
+                    {previewStrengths.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-1.5">
+                        {previewStrengths.map((s, i) => (
+                          <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {previewOpportunities.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {previewOpportunities.map((o, i) => (
+                          <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                            {o}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Live progress cards */}
               <div className="space-y-2">
@@ -332,16 +403,17 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
         )}
       </AnimatePresence>
 
-      {/* Empty state */}
-      {phase === 'results' && isEmpty && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <span className="text-sm text-gray-400">No operational insights found</span>
-        </div>
-      )}
-
-      {/* Results — Strengths + Issues */}
+      {/* ── Phase 3: Results ─────────────────────────────────────── */}
       <AnimatePresence>
-        {phase === 'results' && !isEmpty && resultsRevealed && analysis && (
+        {phase === 'results' && isEmpty && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <span className="text-sm text-gray-400">No operational insights found</span>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {phase === 'results' && !isEmpty && analysis && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
