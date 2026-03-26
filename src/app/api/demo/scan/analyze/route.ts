@@ -284,16 +284,12 @@ async function runMerge(insights: ReviewInsight[]): Promise<{
 }
 
 // ── Review fetch configs ────────────────────────────────────────────
+// Fan out: 1 Apify call per location per sort order. Each returns fast (~3-5s for 50 reviews).
+// As each returns, immediately bucket + Haiku classify. No waiting for all reviews.
 
-const REVIEW_FETCHES_FULL: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
-  { limit: 50, sort: "newest" },
-  { limit: 25, sort: "lowest_rating" },
-  { limit: 25, sort: "highest_rating" },
-];
-
-const REVIEW_FETCHES_LITE: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
-  { limit: 200, sort: "newest" },
-];
+const SORTS_FULL: ("newest" | "lowest_rating" | "highest_rating")[] = ["newest", "lowest_rating", "highest_rating"];
+const SORTS_LITE: ("newest" | "lowest_rating" | "highest_rating")[] = ["newest"];
+const REVIEWS_PER_CALL = 50; // sweet spot: fast Apify response + enough material for Haiku
 
 // ── Main handler ────────────────────────────────────────────────────
 
@@ -321,7 +317,7 @@ export async function POST(request: Request) {
       const ts = () => Date.now() - t0;
 
       try {
-        const reviewFetches = lite ? REVIEW_FETCHES_LITE : REVIEW_FETCHES_FULL;
+        const sorts = lite ? SORTS_LITE : SORTS_FULL;
 
         // Start place details fetch in parallel (skip in lite mode)
         let detailsPromise: Promise<(Awaited<ReturnType<typeof getPlaceDetails>> | null)[]> | null = null;
@@ -347,92 +343,12 @@ export async function POST(request: Request) {
         let totalReviews = 0;
         let mergeVersion = 0;
         let batchCounter = 0;
-
-        const locMap = new Map(locations.map((loc) => [loc.placeId, loc]));
-        const allPlaceIds = locations.map((loc) => loc.placeId);
-        const seen = new Set<string>();
-        const allReviewsForAnalysis: ReviewForAnalysis[] = [];
-
-        // ── PHASE 1: Collect reviews from Apify (parallel) ──────────
-        await Promise.all(
-          reviewFetches.map(async ({ limit, sort }) => {
-            const fetchStart = ts();
-            try {
-              const apifySort = mapSort(sort);
-              const reviews = await fetchApifyReviews(allPlaceIds, limit, apifySort);
-
-              emit("timing", {
-                id: `apify_${sort}`,
-                label: `Apify ${sort}`,
-                startMs: fetchStart,
-                endMs: ts(),
-                detail: `${reviews.length} reviews across ${allPlaceIds.length} places`,
-              });
-
-              const countByPlace = new Map<string, number>();
-              for (const r of reviews) {
-                const key = `${r.reviewerId}|${r.publishedAtDate}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-
-                const loc = locMap.get(r.placeId);
-                const locationName = loc?.displayName ?? r.name ?? "Unknown";
-
-                allReviewsForAnalysis.push({
-                  author: r.reviewerName,
-                  rating: r.stars,
-                  text: r.text,
-                  date: r.publishedAtDate,
-                  locationName,
-                });
-
-                countByPlace.set(r.placeId, (countByPlace.get(r.placeId) ?? 0) + 1);
-              }
-
-              for (const [placeId, count] of countByPlace) {
-                const loc = locMap.get(placeId);
-                emit("reviews_progress", {
-                  placeId,
-                  displayName: loc?.displayName ?? placeId,
-                  reviewCount: count,
-                  sort,
-                });
-              }
-            } catch (err) {
-              emit("timing", {
-                id: `apify_${sort}`,
-                label: `Apify ${sort}`,
-                startMs: fetchStart,
-                endMs: ts(),
-                detail: `FAILED: ${err instanceof Error ? err.message : String(err)}`,
-                error: true,
-              });
-            }
-          })
-        );
-
-        emit("reviews_complete", { totalReviews: allReviewsForAnalysis.length });
-
-        // ── PHASE 2: Bucket reviews by category keywords ────────────
-        const buckets = bucketReviews(allReviewsForAnalysis);
-        const bucketSummary = CATEGORIES
-          .map((cat) => `${cat.label}: ${buckets.get(cat)!.length}`)
-          .filter((s) => !s.endsWith(": 0"))
-          .join(", ");
-        emit("timing", {
-          id: "bucketing",
-          label: "Keyword bucketing",
-          startMs: ts(),
-          endMs: ts(),
-          detail: `${allReviewsForAnalysis.length} reviews → ${bucketSummary}`,
-        });
-
-        // ── PHASE 3: Category-focused Haiku classification (all parallel) ──
-        // Haiku batches run freely. Sonnet merges fire on a 5s interval, decoupled.
-        const categoryPromises: Promise<void>[] = [];
         let lastMergedCount = 0;
 
-        // Incremental Sonnet merges on a 5s interval (decoupled from Haiku)
+        const locMap = new Map(locations.map((loc) => [loc.placeId, loc]));
+        const seen = new Set<string>();
+
+        // Incremental Sonnet merges on a 5s interval (decoupled from everything)
         const mergeInterval = setInterval(async () => {
           if (allInsights.length > lastMergedCount) {
             const version = ++mergeVersion;
@@ -461,37 +377,106 @@ export async function POST(request: Request) {
           }
         }, 5000);
 
-        for (const cat of CATEGORIES) {
-          const catReviews = buckets.get(cat)!;
-          if (catReviews.length === 0) continue;
+        // ── FAN-OUT: 1 Apify call per location × sort order ──────────
+        // Each call returns fast (~3-5s). As each lands, immediately
+        // bucket + Haiku classify. No waiting for all reviews.
 
-          const batches = chunkArray(catReviews, 10);
-          for (const batch of batches) {
-            categoryPromises.push(
+        const allPromises: Promise<void>[] = [];
+
+        for (const loc of locations) {
+          for (const sort of sorts) {
+            allPromises.push(
               (async () => {
-                const batchIdx = batchCounter++;
-                const batchStart = ts();
-                const result = await analyzeCategoryBatch(cat, batch);
+                const fetchStart = ts();
+                try {
+                  const apifySort = mapSort(sort);
+                  const reviews = await fetchApifyReviews([loc.placeId], REVIEWS_PER_CALL, apifySort, 20);
 
-                emit("timing", {
-                  id: `haiku_${cat.id}_${batchIdx}`,
-                  label: `Haiku ${cat.label}`,
-                  startMs: batchStart,
-                  endMs: ts(),
-                  detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights`,
-                });
+                  // Dedupe and convert
+                  const newReviews: ReviewForAnalysis[] = [];
+                  for (const r of reviews) {
+                    const key = `${r.reviewerId}|${r.publishedAtDate}`;
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    newReviews.push({
+                      author: r.reviewerName,
+                      rating: r.stars,
+                      text: r.text,
+                      date: r.publishedAtDate,
+                      locationName: loc.displayName,
+                    });
+                  }
 
-                if (result && result.insights.length > 0) {
-                  allInsights.push(...result.insights);
-                  totalPositive += result.positiveCount;
-                  totalNegative += result.negativeCount;
-                  totalReviews += result.totalReviewsAnalyzed;
+                  emit("timing", {
+                    id: `apify_${loc.placeId}_${sort}`,
+                    label: `Apify ${loc.displayName} ${sort}`,
+                    startMs: fetchStart,
+                    endMs: ts(),
+                    detail: `${reviews.length} raw → ${newReviews.length} new`,
+                  });
 
-                  emit("batch_analysis", {
-                    placeId: cat.id,
-                    displayName: cat.label,
-                    batchIndex: batchIdx,
-                    insights: result.insights,
+                  emit("reviews_progress", {
+                    placeId: loc.placeId,
+                    displayName: loc.displayName,
+                    reviewCount: newReviews.length,
+                    sort,
+                  });
+
+                  if (newReviews.length === 0) return;
+
+                  // Immediately bucket + Haiku classify this batch
+                  const buckets = bucketReviews(newReviews);
+                  const haikuPromises: Promise<void>[] = [];
+
+                  for (const cat of CATEGORIES) {
+                    const catReviews = buckets.get(cat)!;
+                    if (catReviews.length === 0) continue;
+
+                    // Chunk into batches of 10
+                    const batches = chunkArray(catReviews, 10);
+                    for (const batch of batches) {
+                      haikuPromises.push(
+                        (async () => {
+                          const batchIdx = batchCounter++;
+                          const batchStart = ts();
+                          const result = await analyzeCategoryBatch(cat, batch);
+
+                          emit("timing", {
+                            id: `haiku_${cat.id}_${batchIdx}`,
+                            label: `Haiku ${cat.label}`,
+                            startMs: batchStart,
+                            endMs: ts(),
+                            detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights`,
+                          });
+
+                          if (result && result.insights.length > 0) {
+                            allInsights.push(...result.insights);
+                            totalPositive += result.positiveCount;
+                            totalNegative += result.negativeCount;
+                            totalReviews += result.totalReviewsAnalyzed;
+
+                            emit("batch_analysis", {
+                              placeId: loc.placeId,
+                              displayName: loc.displayName,
+                              batchIndex: batchIdx,
+                              insights: result.insights,
+                            });
+                          }
+                        })()
+                      );
+                    }
+                  }
+
+                  // Fire all Haiku batches for this fetch in parallel
+                  await Promise.all(haikuPromises);
+                } catch (err) {
+                  emit("timing", {
+                    id: `apify_${loc.placeId}_${sort}`,
+                    label: `Apify ${loc.displayName} ${sort}`,
+                    startMs: fetchStart,
+                    endMs: ts(),
+                    detail: `FAILED: ${err instanceof Error ? err.message : String(err)}`,
+                    error: true,
                   });
                 }
               })()
@@ -499,11 +484,11 @@ export async function POST(request: Request) {
           }
         }
 
-        // Wait for all Haiku batches to complete (Sonnet merges run independently)
-        await Promise.all(categoryPromises);
+        // Wait for ALL fan-out branches to complete
+        await Promise.all(allPromises);
         clearInterval(mergeInterval);
 
-        // ── Final merge if we have insights but no merge happened yet ──
+        // ── Final Sonnet merge with all insights ──
         if (allInsights.length > 0) {
           const finalStart = ts();
           const merged = await runMerge(allInsights);
@@ -539,7 +524,7 @@ export async function POST(request: Request) {
           label: "Total pipeline",
           startMs: 0,
           endMs: ts(),
-          detail: `${locations.length} locations, ${allReviewsForAnalysis.length} reviews, ${allInsights.length} insights`,
+          detail: `${locations.length} locations, ${seen.size} reviews, ${allInsights.length} insights`,
         });
 
         emit("done", {

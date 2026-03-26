@@ -32,6 +32,9 @@ export async function fetchApifyReviews(
 
   const url = `${BASE}?token=${APIFY_TOKEN}&format=json&timeout=${timeoutSecs}`;
 
+  const controller = new AbortController();
+  const clientTimeout = setTimeout(() => controller.abort(), timeoutSecs * 1000);
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -42,7 +45,10 @@ export async function fetchApifyReviews(
       language: "en",
       personalData: true,
     }),
+    signal: controller.signal,
   });
+
+  clearTimeout(clientTimeout);
 
   if (!res.ok) {
     const text = await res.text();
