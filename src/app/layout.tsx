@@ -16,7 +16,7 @@ const merriweather = Merriweather({
 });
 
 export const metadata: Metadata = {
-  title: "allgravy — Self-Service Onboarding",
+  title: "All Gravy",
   description: "Get your business online in minutes",
 };
 
