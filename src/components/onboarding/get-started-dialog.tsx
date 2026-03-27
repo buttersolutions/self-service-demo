@@ -11,6 +11,7 @@ import {
 import { OnboardingInput } from './ui/onboarding-input';
 import { OnboardingButton } from './ui/onboarding-button';
 import { useSelfServiceOnboarding } from '@/hooks/use-self-service-onboarding';
+import { toast } from 'sonner';
 import { isValidPhoneNumber, parsePhoneNumber } from 'libphonenumber-js';
 import { COUNTRY_CODES, DEFAULT_COUNTRY, type CountryCode } from '@/lib/country-codes';
 import { useOnboarding } from '@/lib/demo-flow-context';
@@ -168,7 +169,7 @@ const stepTransition = {
 };
 
 export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) {
-  const { loading, error, sendOtp, verifyOtp, redirectToApp, clearError } = useSelfServiceOnboarding();
+  const { loading, error, sendOtp, verifyOtp, redirectToApp, redirectToSignIn, clearError } = useSelfServiceOnboarding();
   const { state } = useOnboarding();
   const [step, setStep] = useState<DialogStep>('email');
   const [email, setEmail] = useState('');
@@ -241,7 +242,14 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
     }
     const result = await verifyOtp({ email, otp, fullName, phoneNumber: fullPhone });
     if (result) {
-      redirectToApp(result.code);
+      if (result.isNewUser === false) {
+        toast.info('Account already exists — redirecting to log in...');
+        setTimeout(() => {
+          redirectToSignIn();
+        }, 2000);
+      } else {
+        redirectToApp(result.code);
+      }
     }
   };
 

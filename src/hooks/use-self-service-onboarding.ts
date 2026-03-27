@@ -155,7 +155,11 @@ export function useSelfServiceOnboarding() {
     window.location.href = `${REDIRECT_BASE_URL}/welcome?code=${code}`;
   };
 
+  const redirectToSignIn = () => {
+    window.location.href = `${REDIRECT_BASE_URL}/signin`;
+  };
+
   const clearError = () => setError(null);
 
-  return { loading, error, sendOtp, verifyOtp, redirectToApp, clearError };
+  return { loading, error, sendOtp, verifyOtp, redirectToApp, redirectToSignIn, clearError };
 }
