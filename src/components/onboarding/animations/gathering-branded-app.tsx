@@ -724,6 +724,7 @@ export function GatheringBrandedApp({
   const darkestBrandColor = primaryColor;
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const LAPTOP_SCALE = 780 / 1200;
   const PHONE_SCALE = 250 / 390;
@@ -732,6 +733,27 @@ export function GatheringBrandedApp({
   const MOCKUP_H = 540;
   const [mockupScale, setMockupScale] = useState(0.85);
   const roRef = useRef<ResizeObserver | null>(null);
+
+  // Track the full outer container size for fullscreen scaling
+  const outerRef = useRef<HTMLDivElement | null>(null);
+  const [outerSize, setOuterSize] = useState({ width: 0, height: 0 });
+  const outerRoRef = useRef<ResizeObserver | null>(null);
+
+  const outerMeasuredRef = useCallback((node: HTMLDivElement | null) => {
+    if (outerRoRef.current) {
+      outerRoRef.current.disconnect();
+      outerRoRef.current = null;
+    }
+    outerRef.current = node;
+    if (!node) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width === 0 || height === 0) return;
+      setOuterSize({ width, height });
+    });
+    ro.observe(node);
+    outerRoRef.current = ro;
+  }, []);
 
   const mockupAreaRef = useCallback((node: HTMLDivElement | null) => {
     if (roRef.current) {
@@ -749,165 +771,215 @@ export function GatheringBrandedApp({
     roRef.current = ro;
   }, []);
 
+  const handleGetStarted = () => {
+    setExpanded(true);
+    setTimeout(() => setDialogOpen(true), 50);
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) setExpanded(false);
+  };
+
+  const FEED_W = 1200;
+  const FEED_H = 750;
+  const fullscreenScale = outerSize.width > 0
+    ? Math.max(outerSize.width / FEED_W, outerSize.height / FEED_H)
+    : 1;
+
   return (
-    <div className="w-full h-full p-4 bg-[#625CE4]">
+    <div className="w-full h-full relative overflow-hidden" ref={outerMeasuredRef}>
+      {/* ── Default view: sidebar + mockups ── */}
       <motion.div
-        className="w-full h-full flex rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={isActive ? { opacity: 1 } : {}}
-        transition={{ delay: 0.1, duration: 0.4 }}
+        className="absolute inset-0"
+        animate={expanded ? { opacity: 0, pointerEvents: 'none' as const } : { opacity: 1, pointerEvents: 'auto' as const }}
+        transition={{ duration: 0.1 }}
       >
-        {/* Left sidebar */}
-        <motion.div
-          className="w-80 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
-          initial={{ opacity: 0, x: -40 }}
-          animate={isActive ? { opacity: 1, x: 0 } : {}}
-          transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="flex-1 px-3.5 py-5">
-            {/* Logo */}
-            <div className="px-2.5 mb-5">
-              <AllgravyLogo className="w-24 text-gray-900" />
-            </div>
-
-            {/* Checklist */}
-            <motion.p
-              className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 px-2.5 mb-3"
-              initial={{ opacity: 0 }}
-              animate={isActive ? { opacity: 1 } : {}}
-              transition={{ delay: 0.5 }}
-            >
-              What&apos;s included
-            </motion.p>
-
-            <div className="space-y-3">
-              {CHECKLIST_ITEMS.map((item, i) => (
-                <motion.div
-                  key={i}
-                  className="flex items-start gap-2.5 px-2.5"
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={isActive ? { opacity: 1, x: 0 } : {}}
-                  transition={{ delay: 1.0 + i * 0.1, duration: 0.35 }}
-                >
-                  <div className="shrink-0 mt-px">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={isActive ? { scale: 1 } : {}}
-                      transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 1.0 + i * 0.1 }}
-                      className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center"
-                    >
-                      <Check className="size-2.5 text-white" strokeWidth={3} />
-                    </motion.div>
-                  </div>
-                  <span className="text-[13px] font-medium text-gray-900">{item}</span>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Right side — mockups with overlay button */}
-        <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-6 pt-12">
-          <motion.h3
-            className="text-3xl font-semibold text-gray-900 font-serif mb-12 shrink-0"
-            initial={{ opacity: 0, y: 16 }}
-            animate={isActive ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.2, duration: 0.5 }}
-          >
-            Your branded app is ready
-          </motion.h3>
-          <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
-            <div
-              className="relative"
-              style={{
-                width: MOCKUP_W,
-                height: MOCKUP_H,
-                transform: `scale(${mockupScale})`,
-                transformOrigin: 'top left',
-              }}
-            >
-              {/* App icon */}
-              <motion.div
-                className="absolute z-10"
-                style={{ left: 0, bottom: 80 }}
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={isActive ? { opacity: 1, scale: 1, rotate: -6 } : {}}
-                transition={{ delay: 0.9, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div
-                  className="flex items-center justify-center overflow-hidden"
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 14,
-                    backgroundColor: primaryColor,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
-                  }}
-                >
-                  {logoUrl ? (
-                    <img src={logoUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
-                  )}
-                </div>
-              </motion.div>
-
-              {/* Laptop */}
-              <motion.div
-                className="absolute bottom-0 left-0"
-                initial={{ opacity: 0, y: 30, rotate: 0 }}
-                animate={isActive ? { opacity: 1, y: 0, rotate: 0 } : { rotate: 0 }}
-                transition={{ delay: 0.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <LaptopMockup>
-                  <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                    <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} animate={isActive} />
-                  </div>
-                </LaptopMockup>
-              </motion.div>
-
-              <motion.div
-                className="absolute z-10"
-                style={{ right: -20, bottom: -15 }}
-                initial={{ opacity: 0, y: 40, scale: 0.85, rotate: 0 }}
-                animate={isActive ? { opacity: 1, y: 0, scale: 1, rotate: 3 } : {}}
-                transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <PhoneMockup>
-                  <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
-                    <MobileFeedReplica
-                      businessName={businessName}
-                      logoUrl={logoUrl}
-                      primaryColor={primaryColor}
-                      headerColor={darkestBrandColor}
-                      photos={photos}
-                      animate={isActive}
-                    />
-                  </div>
-                </PhoneMockup>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Gradient overlay with header + button */}
+        <div className="w-full h-full p-4 bg-[#625CE4]">
           <motion.div
-            className="absolute bottom-0 left-0 right-0 z-20 flex items-end justify-center pb-8"
-            style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)', height: 200 }}
+            className="w-full h-full flex rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
             initial={{ opacity: 0 }}
             animate={isActive ? { opacity: 1 } : {}}
-            transition={{ delay: 1.2, duration: 0.5 }}
+            transition={{ delay: 0.1, duration: 0.4 }}
           >
-            <button
-              onClick={() => setDialogOpen(true)}
-              className="h-12 px-20 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_2px_8px_rgba(98,92,228,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
+            {/* Left sidebar */}
+            <motion.div
+              className="w-80 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
+              initial={{ opacity: 0, x: -40 }}
+              animate={isActive ? { opacity: 1, x: 0 } : {}}
+              transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
-              Get started
-            </button>
+              <div className="flex-1 px-3.5 py-5">
+                {/* Logo */}
+                <div className="px-2.5 mb-5">
+                  <AllgravyLogo className="w-24 text-gray-900" />
+                </div>
+
+                {/* Checklist */}
+                <motion.p
+                  className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 px-2.5 mb-3"
+                  initial={{ opacity: 0 }}
+                  animate={isActive ? { opacity: 1 } : {}}
+                  transition={{ delay: 0.5 }}
+                >
+                  What&apos;s included
+                </motion.p>
+
+                <div className="space-y-3">
+                  {CHECKLIST_ITEMS.map((item, i) => (
+                    <motion.div
+                      key={i}
+                      className="flex items-start gap-2.5 px-2.5"
+                      initial={{ opacity: 0, x: -16 }}
+                      animate={isActive ? { opacity: 1, x: 0 } : {}}
+                      transition={{ delay: 1.0 + i * 0.1, duration: 0.35 }}
+                    >
+                      <div className="shrink-0 mt-px">
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={isActive ? { scale: 1 } : {}}
+                          transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 1.0 + i * 0.1 }}
+                          className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center"
+                        >
+                          <Check className="size-2.5 text-white" strokeWidth={3} />
+                        </motion.div>
+                      </div>
+                      <span className="text-[13px] font-medium text-gray-900">{item}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Right side — mockups with overlay button */}
+            <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-6 pt-12">
+              <motion.h3
+                className="text-3xl font-semibold text-gray-900 font-serif mb-12 shrink-0"
+                initial={{ opacity: 0, y: 16 }}
+                animate={isActive ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.2, duration: 0.5 }}
+              >
+                Your branded app is ready
+              </motion.h3>
+              <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
+                <div
+                  className="relative"
+                  style={{
+                    width: MOCKUP_W,
+                    height: MOCKUP_H,
+                    transform: `scale(${mockupScale})`,
+                    transformOrigin: 'top left',
+                  }}
+                >
+                  {/* App icon */}
+                  <motion.div
+                    className="absolute z-10"
+                    style={{ left: 0, bottom: 80 }}
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={isActive ? { opacity: 1, scale: 1, rotate: -6 } : {}}
+                    transition={{ delay: 0.9, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <div
+                      className="flex items-center justify-center overflow-hidden"
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 14,
+                        backgroundColor: primaryColor,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
+                      }}
+                    >
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Laptop */}
+                  <motion.div
+                    className="absolute bottom-0 left-0"
+                    initial={{ opacity: 0, y: 30, rotate: 0 }}
+                    animate={isActive ? { opacity: 1, y: 0, rotate: 0 } : { rotate: 0 }}
+                    transition={{ delay: 0.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <LaptopMockup>
+                      <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
+                        <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                      </div>
+                    </LaptopMockup>
+                  </motion.div>
+
+                  <motion.div
+                    className="absolute z-10"
+                    style={{ right: -20, bottom: -15 }}
+                    initial={{ opacity: 0, y: 40, scale: 0.85, rotate: 0 }}
+                    animate={isActive ? { opacity: 1, y: 0, scale: 1, rotate: 3 } : {}}
+                    transition={{ delay: 0.7, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <PhoneMockup>
+                      <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
+                        <MobileFeedReplica
+                          businessName={businessName}
+                          logoUrl={logoUrl}
+                          primaryColor={primaryColor}
+                          headerColor={darkestBrandColor}
+                          photos={photos}
+                          animate={isActive}
+                        />
+                      </div>
+                    </PhoneMockup>
+                  </motion.div>
+                </div>
+              </div>
+
+              {/* Gradient overlay with header + button */}
+              <motion.div
+                className="absolute bottom-0 left-0 right-0 z-20 flex items-end justify-center pb-8"
+                style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)', height: 200 }}
+                initial={{ opacity: 0 }}
+                animate={isActive ? { opacity: 1 } : {}}
+                transition={{ delay: 1.2, duration: 0.5 }}
+              >
+                <button
+                  onClick={handleGetStarted}
+                  className="h-12 px-20 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_2px_8px_rgba(98,92,228,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
+                >
+                  Get started
+                </button>
+              </motion.div>
+            </div>
           </motion.div>
         </div>
-
-        <GetStartedDialog open={dialogOpen} onOpenChange={setDialogOpen} />
       </motion.div>
+
+      {/* ── Expanded view: fullscreen FeedReplica + dialog ── */}
+      <motion.div
+        className="absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={expanded ? { opacity: 1 } : { opacity: 0, pointerEvents: 'none' as const }}
+        transition={{ duration: 0.1 }}
+      >
+        <div
+          style={{
+            width: FEED_W,
+            height: FEED_H,
+            transform: `scale(${fullscreenScale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <FeedReplica
+            businessName={businessName}
+            logoUrl={logoUrl}
+            primaryColor={primaryColor}
+            photos={photos}
+            animate={expanded}
+          />
+        </div>
+      </motion.div>
+
+      <GetStartedDialog open={dialogOpen} onOpenChange={handleDialogChange} />
     </div>
   );
 }
