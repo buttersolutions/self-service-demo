@@ -365,8 +365,8 @@ export function StepGathering({
           />
         )}
 
-        {/* Prev / Next navigation buttons (hidden on last step) */}
-        {currentPhase.id !== 'branded-app' && (
+        {/* Prev / Next navigation buttons (hidden on last step and in production) */}
+        {process.env.NODE_ENV !== 'production' && currentPhase.id !== 'branded-app' && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
             <button
               onClick={goToPrev}

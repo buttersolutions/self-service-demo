@@ -499,7 +499,7 @@ function OnboardingInner() {
         )}
       </AnimatePresence>
 
-      <FetchTimingsDebug timings={fetchTimings} />
+      {process.env.NODE_ENV !== 'production' && <FetchTimingsDebug timings={fetchTimings} />}
     </div>
   );
 }
