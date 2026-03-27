@@ -40,6 +40,7 @@ interface VerifyOtpRequest {
   otp: string;
   firstName: string;
   lastName: string;
+  phoneNumber?: string;
   termsAndConditions: boolean;
   companyName: string;
   locations: { name: string; countryCode: string }[];
@@ -103,6 +104,7 @@ export function useSelfServiceOnboarding() {
     email: string;
     otp: string;
     fullName: string;
+    phoneNumber?: string;
   }) => {
     setError(null);
     setLoading(true);
@@ -116,6 +118,7 @@ export function useSelfServiceOnboarding() {
         otp: params.otp,
         firstName,
         lastName,
+        phoneNumber: params.phoneNumber || undefined,
         termsAndConditions: true,
         companyName: state.business?.name || 'My Company',
         locations: state.locations.map((l) => ({
@@ -133,6 +136,7 @@ export function useSelfServiceOnboarding() {
           },
           branding: {
             logoURL: state.business?.logoUrl || undefined,
+            squareLogoURL: state.business?.logoUrl || undefined,
           },
         },
       };

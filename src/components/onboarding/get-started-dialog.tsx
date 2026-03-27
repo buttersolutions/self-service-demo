@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, User, Mail, ChevronDown, Search } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,12 +11,139 @@ import {
 import { OnboardingInput } from './ui/onboarding-input';
 import { OnboardingButton } from './ui/onboarding-button';
 import { useSelfServiceOnboarding } from '@/hooks/use-self-service-onboarding';
+import { isValidPhoneNumber, parsePhoneNumber } from 'libphonenumber-js';
+import { COUNTRY_CODES, DEFAULT_COUNTRY, type CountryCode } from '@/lib/country-codes';
+import { useOnboarding } from '@/lib/demo-flow-context';
 
 type DialogStep = 'email' | 'otp';
 
 interface GetStartedDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/* ── Inline searchable country picker ──────────────────────────────── */
+
+function CountryCodePicker({
+  value,
+  onChange,
+}: {
+  value: CountryCode;
+  onChange: (c: CountryCode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const filtered = search
+    ? COUNTRY_CODES.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search.toLowerCase()) ||
+          c.dial.includes(search) ||
+          c.code.toLowerCase().includes(search.toLowerCase()),
+      )
+    : COUNTRY_CODES;
+
+  // Position the dropdown below the trigger
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, left: rect.left });
+  }, [open]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      )
+        return;
+      setOpen(false);
+      setSearch('');
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Focus search when opened
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
+  }, [open]);
+
+  const select = useCallback(
+    (c: CountryCode) => {
+      onChange(c);
+      setOpen(false);
+      setSearch('');
+    },
+    [onChange],
+  );
+
+  return (
+    <div className="shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 h-11 pl-3 pr-1.5 cursor-pointer rounded-l-xl"
+      >
+        <span className="text-base leading-none">{value.flag}</span>
+        <span className="text-sm text-gray-900">{value.dial}</span>
+        <ChevronDown className="size-3.5 text-gray-400" />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed w-72 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden font-sans"
+            style={{ top: pos.top, left: pos.left, zIndex: 9999 }}
+          >
+            {/* Search */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+              <Search className="size-3.5 text-gray-400 shrink-0" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search countries..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 text-sm text-gray-900 placeholder:text-gray-400 outline-none bg-transparent"
+              />
+            </div>
+            {/* List */}
+            <div className="max-h-[220px] overflow-y-auto overscroll-contain">
+              {filtered.length === 0 && (
+                <div className="px-3 py-4 text-sm text-gray-400 text-center">No results</div>
+              )}
+              {filtered.map((c) => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => select(c)}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors cursor-pointer ${
+                    c.code === value.code ? 'bg-gray-50 font-medium' : ''
+                  }`}
+                >
+                  <span className="text-base leading-none">{c.flag}</span>
+                  <span className="flex-1 text-gray-900 truncate">{c.name}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{c.dial}</span>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
 }
 
 const stepVariants = {
@@ -41,9 +169,19 @@ const stepTransition = {
 
 export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) {
   const { loading, error, sendOtp, verifyOtp, redirectToApp, clearError } = useSelfServiceOnboarding();
+  const { state } = useOnboarding();
   const [step, setStep] = useState<DialogStep>('email');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
+  const [countryCode, setCountryCode] = useState<CountryCode>(() => {
+    const locCode = state.locations[0]?.countryCode?.toUpperCase();
+    if (locCode) {
+      const match = COUNTRY_CODES.find((c) => c.code === locCode || (locCode === 'UK' && c.code === 'GB'));
+      if (match) return match;
+    }
+    return DEFAULT_COUNTRY;
+  });
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -53,6 +191,8 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
     setStep('email');
     setEmail('');
     setFullName('');
+    setCountryCode(DEFAULT_COUNTRY);
+    setPhoneNumber('');
     setOtp('');
     setLocalError(null);
     clearError();
@@ -74,6 +214,13 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
       setLocalError('Please enter a valid email address.');
       return;
     }
+    if (phoneNumber) {
+      const full = `${countryCode.dial}${phoneNumber}`;
+      if (!isValidPhoneNumber(full)) {
+        setLocalError('Please enter a valid phone number.');
+        return;
+      }
+    }
 
     const success = await sendOtp(email);
     if (success) setStep('otp');
@@ -87,7 +234,12 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
       return;
     }
 
-    const result = await verifyOtp({ email, otp, fullName });
+    let fullPhone: string | undefined;
+    if (phoneNumber) {
+      const parsed = parsePhoneNumber(`${countryCode.dial}${phoneNumber}`);
+      fullPhone = parsed?.format('E.164');
+    }
+    const result = await verifyOtp({ email, otp, fullName, phoneNumber: fullPhone });
     if (result) {
       redirectToApp(result.code);
     }
@@ -120,10 +272,10 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
             >
               <div className="mb-6">
                 <h2 className="text-lg font-semibold text-gray-900 font-sans">
-                  Get started
+                  Almost there!
                 </h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  Enter your details to set up your account
+                  Just a few details so we can set up your app and get you started.
                 </p>
               </div>
 
@@ -133,14 +285,31 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="!h-11 !rounded-xl !text-sm"
+                  icon={<User className="size-4" strokeWidth={2.5} />}
                   autoFocus
                 />
+
+                {/* Phone number with inline country code picker */}
+                <div className="relative w-full flex items-center h-11 rounded-xl bg-white border border-gray-200 shadow-xs transition-all duration-200 focus-within:border-gray-300">
+                  <CountryCodePicker value={countryCode} onChange={setCountryCode} />
+                  <div className="w-px h-5 bg-gray-200 shrink-0" />
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="Phone number"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d]/g, ''))}
+                    className="flex-1 h-full bg-transparent px-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none rounded-r-xl"
+                  />
+                </div>
+
                 <OnboardingInput
                   type="email"
                   placeholder="Work email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="!h-11 !rounded-xl !text-sm"
+                  icon={<Mail className="size-4" strokeWidth={2.5} />}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
                 />
               </div>
@@ -181,7 +350,7 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
                   Check your email
                 </h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  We sent a 6-digit code to <span className="text-gray-600 font-medium">{email}</span>
+                  We sent a 6-digit code to your email <span className="text-gray-600 font-medium">{email}</span>
                 </p>
               </div>
 
