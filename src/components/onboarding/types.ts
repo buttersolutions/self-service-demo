@@ -1,6 +1,5 @@
-import type { CompanyInsight } from '@/lib/saber';
 import type { WaterfallCompany, WaterfallPerson } from '@/lib/waterfall';
-import type { PlacePhoto, StaffMention, StaffAnalysis } from '@/lib/types';
+import type { PlacePhoto, ReviewInsight, ReviewAnalysis } from '@/lib/types';
 
 export type Step = 'search' | 'confirm-business' | 'confirm-locations' | 'gathering' | 'done';
 
@@ -9,6 +8,9 @@ export interface BusinessData {
   logoUrl: string | null;
   domain: string;
   brandColors: string[];
+  fonts?: string[];
+  ogImage?: string | null;
+  websiteImages?: string[];
 }
 
 export interface FetchTiming {
@@ -28,6 +30,8 @@ export interface LocationItem {
   countryCode?: string; // ISO 3166-1 alpha-2 lowercase (e.g. "us", "gb")
   lat: number;
   lng: number;
+  userRatingCount?: number;
+  rating?: number;
 }
 
 export interface ReviewItem {
@@ -37,12 +41,27 @@ export interface ReviewItem {
   date: string;
 }
 
+export interface ReviewProgressEvent {
+  placeId: string;
+  displayName: string;
+  reviewCount: number;
+  sort: string;
+}
+
+export interface FeedPost {
+  body: string;
+  channel: string;
+  platform: 'desktop' | 'mobile';
+}
+
 export interface GatheringData {
   reviews: ReviewItem[] | null;
-  insights: CompanyInsight[] | null;
   company: WaterfallCompany | null;
   persons: WaterfallPerson[] | null;
   photos: PlacePhoto[];
-  staffMentions: StaffMention[];
-  staffAnalysis: StaffAnalysis | null;
+  reviewInsights: ReviewInsight[];
+  reviewAnalysis: ReviewAnalysis | null;
+  reviewAnalysisPreview: ReviewAnalysis | null;
+  reviewProgress: ReviewProgressEvent[];
+  feedPosts: FeedPost[] | null;
 }

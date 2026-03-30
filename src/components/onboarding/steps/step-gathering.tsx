@@ -7,14 +7,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { TypewriterSearch } from '../ui/typewriter-search';
 import { GatheringSidebar, type SidebarStep } from '../animations/gathering-sidebar';
 import { GatheringMap } from '../animations/gathering-map';
-import { GatheringReviews } from '../animations/gathering-reviews';
+// GatheringReviews removed — analysis component handles the full phase
 import { GatheringStaffAnalysis } from '../animations/gathering-staff-analysis';
 import { GatheringPhotos } from '../animations/gathering-photos';
 import { GatheringBrandedApp } from '../animations/gathering-branded-app';
 import type { GatheringData } from '../types';
 import { useOnboarding } from '@/lib/demo-flow-context';
 
-type PhaseId = 'locations' | 'reviews' | 'staff-analysis' | 'photos' | 'branded-app';
+type PhaseId = 'locations' | 'photos' | 'reviews-analysis' | 'branded-app';
 
 interface PhaseConfig {
   id: PhaseId;
@@ -37,21 +37,14 @@ const PHASES: PhaseConfig[] = [
     searchText: (name) => `Analysing ${name} images...`,
     minDurationMs: Infinity,
     maxDurationMs: Infinity,
-    dataReady: () => false, // Controlled by GatheringPhotos onComplete (3s after last photo)
+    dataReady: () => false, // Controlled by GatheringPhotos onComplete
   },
   {
-    id: 'reviews',
-    searchText: (name) => `Collecting ${name} reviews...`,
-    minDurationMs: 30000,
-    maxDurationMs: 50000,
-    dataReady: (data) => data.reviews !== null,
-  },
-  {
-    id: 'staff-analysis',
+    id: 'reviews-analysis',
     searchText: (name) => `Analysing ${name} reviews...`,
     minDurationMs: Infinity,
     maxDurationMs: Infinity,
-    dataReady: () => false, // Controlled by GatheringStaffAnalysis onComplete (all animations + 5s)
+    dataReady: () => false, // Controlled internally: reviews -> analysis -> onComplete
   },
   {
     id: 'branded-app',
@@ -65,12 +58,11 @@ const PHASES: PhaseConfig[] = [
 const SIDEBAR_STEPS: SidebarStep[] = [
   { id: 'locations', label: 'Mapping locations', description: 'Plotting your locations on the map' },
   { id: 'photos', label: 'Analysing images', description: 'Analysing business imagery' },
-  { id: 'reviews', label: 'Collecting reviews', description: 'Reading what customers say' },
-  { id: 'staff-analysis', label: 'Analysing reviews', description: 'Analysing customer feedback' },
+  { id: 'reviews-analysis', label: 'Analysing reviews', description: 'Extracting insights from customer feedback' },
   { id: 'branded-app', label: 'Your branded app', description: 'Personalizing your experience' },
 ];
 
-// Step transition variants — dramatic slide + scale + fade + blur
+// Step transition variants
 const phaseVariants = {
   enter: (direction: number) => ({
     opacity: 0,
@@ -149,13 +141,11 @@ export function StepGathering({
     }
   }, [currentPhaseIndex, onComplete]);
 
-  // Auto-advance timers (skip phases with Infinity durations — they advance via callbacks)
+  // Auto-advance timers (skip phases with Infinity durations)
   useEffect(() => {
     if (!autoAdvance) return;
 
     const phase = PHASES[currentPhaseIndex];
-
-    // Phases with Infinity min duration are controlled externally (e.g. report, branded-app)
     if (!isFinite(phase.minDurationMs)) return;
 
     const elapsed = Date.now() - phaseStartRef.current;
@@ -174,7 +164,6 @@ export function StepGathering({
       }
     }, remaining);
 
-    // Only set max timer if finite
     let maxTimer: ReturnType<typeof setTimeout> | undefined;
     if (isFinite(phase.maxDurationMs)) {
       const maxRemaining = Math.max(0, phase.maxDurationMs - elapsed);
@@ -229,39 +218,31 @@ export function StepGathering({
     setPhotosAllShown(true);
   }, []);
 
-  // Auto-navigate from photos to next step after all shown + 3s delay
   const handlePhotosComplete = useCallback(() => {
     if (autoAdvance) {
       advancePhase();
     }
   }, [autoAdvance, advancePhase]);
 
-  // Auto-navigate from staff-analysis after all animations + 5s
-  const handleStaffAnalysisComplete = useCallback(() => {
-    if (autoAdvance) {
-      advancePhase();
-    }
+  // Analysis sub-phase complete → user must manually advance to branded-app via Next button
+  const handleAnalysisComplete = useCallback(() => {
+    // Disabled auto-advance: let user read the analysis results
   }, [autoAdvance, advancePhase]);
 
   const renderAnimation = () => {
     switch (currentPhase.id) {
       case 'locations':
         return <GatheringMap locations={locations} isActive />;
-      case 'reviews':
-        return (
-          <GatheringReviews
-            reviews={gatheringData.reviews}
-            isActive
-          />
-        );
-      case 'staff-analysis':
+      case 'reviews-analysis':
         return (
           <GatheringStaffAnalysis
-            mentions={gatheringData.staffMentions}
-            analysis={gatheringData.staffAnalysis}
+            mentions={gatheringData.reviewInsights}
+            analysis={gatheringData.reviewAnalysis}
+            analysisPreview={gatheringData.reviewAnalysisPreview}
             reviews={gatheringData.reviews}
+            progress={gatheringData.reviewProgress}
             isActive
-            onComplete={handleStaffAnalysisComplete}
+            onComplete={handleAnalysisComplete}
           />
         );
       case 'photos':
@@ -290,6 +271,8 @@ export function StepGathering({
     }
   };
 
+  const searchText = currentPhase.searchText(businessName);
+
   return (
     <motion.div
       className="relative w-full h-dvh"
@@ -297,7 +280,7 @@ export function StepGathering({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
     >
-      {/* Sidebar — floating over content, animates away on branded-app */}
+      {/* Sidebar */}
       <motion.div
         className="absolute top-4 left-4 bottom-4 z-40 w-64"
         animate={currentPhase.id === 'branded-app' ? { x: -280, opacity: 0 } : { x: 0, opacity: 1 }}
@@ -313,9 +296,9 @@ export function StepGathering({
 
       {/* Full-bleed content area */}
       <div className="w-full h-full relative overflow-hidden">
-        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews' || currentPhase.id === 'staff-analysis' || currentPhase.id === 'photos') && (
+        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews-analysis' || currentPhase.id === 'photos') && (
           <div className="absolute top-4 z-30 w-full max-w-md px-6" style={{ left: 'calc(50% + 140px)', transform: 'translateX(-50%)' }}>
-            <TypewriterSearch key={currentPhase.id} text={currentPhase.searchText(businessName)} />
+            <TypewriterSearch key={currentPhase.id} text={searchText} />
           </div>
         )}
 
@@ -335,8 +318,8 @@ export function StepGathering({
           </motion.div>
         </AnimatePresence>
 
-        {/* Scan line — on map and reviews (photos: only after all shown, 2 sweeps) */}
-        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews') && (
+        {/* Scan line — on map and reviews collection */}
+        {currentPhase.id === 'locations' && (
           <motion.div
             key={`scan-${currentPhase.id}`}
             className="absolute left-0 right-0 h-[2px] z-20 pointer-events-none"

@@ -1,7 +1,7 @@
-import type { StaffAnalysis } from "@/lib/types";
+import type { ReviewAnalysis } from "@/lib/types";
 
 interface StaffNarrativeHeroProps {
-  analysis: StaffAnalysis;
+  analysis: ReviewAnalysis;
   locationCount: number;
   className?: string;
 }
@@ -24,13 +24,13 @@ export function StaffNarrativeHero({
         <Stat value={analysis.totalReviewsAnalyzed} label="reviews analyzed" />
         <Stat
           value={analysis.positiveCount + analysis.negativeCount}
-          label="mention staff"
+          label="operational insights"
         />
         <Stat value={locationCount} label={locationCount === 1 ? "location scanned" : "locations scanned"} />
-        {analysis.namedEmployees.length > 0 && (
+        {analysis.categoryBreakdown.length > 0 && (
           <Stat
-            value={analysis.namedEmployees.length}
-            label={analysis.namedEmployees.length === 1 ? "employee named" : "employees named"}
+            value={analysis.categoryBreakdown.length}
+            label={analysis.categoryBreakdown.length === 1 ? "area identified" : "areas identified"}
           />
         )}
       </div>

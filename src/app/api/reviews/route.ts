@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchOutscraperReviews } from '@/lib/outscraper';
+import { fetchApifyReviews } from '@/lib/apify-reviews';
 
 export const maxDuration = 120;
 
@@ -11,26 +11,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'placeIds array is required' }, { status: 400 });
     }
 
-    const ids = placeIds.slice(0, 1);
+    const ids = placeIds.slice(0, 5);
+    const apifyReviews = await fetchApifyReviews(ids, limit, 'mostRelevant', 60);
 
-    const results = await Promise.allSettled(
-      ids.map((id: string) =>
-        Promise.race([
-          fetchOutscraperReviews(id, limit, 'most_relevant'),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 45000)),
-        ])
-      ),
-    );
-
-    const reviews = results.flatMap((r) => {
-      if (r.status !== 'fulfilled' || !r.value) return [];
-      return r.value.reviews_data.map((rev) => ({
-        author: rev.autor_name,
-        rating: rev.review_rating,
-        text: rev.review_text,
-        date: rev.review_datetime_utc,
-      }));
-    });
+    const reviews = apifyReviews.map((r) => ({
+      author: r.reviewerName,
+      rating: r.stars,
+      text: r.text,
+      date: r.publishedAtDate,
+    }));
 
     return NextResponse.json({ reviews });
   } catch {

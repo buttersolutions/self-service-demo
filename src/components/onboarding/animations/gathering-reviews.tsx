@@ -11,7 +11,7 @@ interface GatheringReviewsProps {
 }
 
 const FIRST_REVEAL_DELAY_MS = 400;
-const REVEAL_INTERVAL_MS = 3500;
+const REVEAL_INTERVAL_MS = 5000;
 const MAX_VISIBLE = 20;
 
 function StarRating({ rating }: { rating: number }) {
@@ -136,7 +136,7 @@ export function GatheringReviews({ reviews, isActive }: GatheringReviewsProps) {
                         <span className="text-[10px] text-gray-300 shrink-0">{review.date}</span>
                       )}
                     </div>
-                    <p className="text-[13px] leading-relaxed text-gray-500 line-clamp-4">
+                    <p className="text-[13px] leading-relaxed text-gray-500 line-clamp-6">
                       {review.text}
                     </p>
                     <div className="flex items-center gap-1 mt-2.5 pt-2 border-t border-gray-50">

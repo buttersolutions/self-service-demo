@@ -8,6 +8,7 @@ export interface PlaceSummary {
   types?: string[];
   countryCode?: string; // ISO 3166-1 alpha-2 lowercase (e.g. "us", "gb")
   userRatingCount?: number;
+  rating?: number;
   location: {
     lat: number;
     lng: number;
@@ -35,35 +36,47 @@ export interface PlaceDetails extends PlaceSummary {
   userRatingCount?: number;
 }
 
-// --- Staff analysis types ---
+// --- Review analysis types ---
 
-export interface StaffMention {
+export type InsightCategory = 'service-attitude' | 'speed-efficiency' | 'training-knowledge' | 'consistency' | 'dietary-safety' | 'staffing';
+
+export interface ReviewInsight {
   reviewAuthor: string;
   reviewText: string;
   reviewRating: number;
   reviewDate: string;
   sentiment: "positive" | "negative";
-  staffNames: string[];
+  category: InsightCategory;
   relevantExcerpt: string;
   locationName: string;
+  allgravyModule: string;
 }
 
-export interface StaffAnalysis {
+export interface CategoryBreakdown {
+  category: string;
+  allgravyModule: string;
+  percentage: number;
+  count: number;
+  sentiment: 'mostly-positive' | 'mostly-negative' | 'mixed';
+}
+
+export interface ReviewAnalysis {
   headline: string;
   body: string;
-  standoutEmployee: string | null;
-  mentions: StaffMention[];
+  insights: ReviewInsight[];
   totalReviewsAnalyzed: number;
   positiveCount: number;
   negativeCount: number;
-  namedEmployees: string[];
+  categoryBreakdown: CategoryBreakdown[];
+  strengths: string[];
+  opportunities: string[];
 }
 
 export interface ScanResult {
   place: PlaceSummary;
   locations: PlaceSummary[];
   locationDetails: PlaceDetails[];
-  staffAnalysis: StaffAnalysis | null;
+  reviewAnalysis: ReviewAnalysis | null;
 }
 
 // --- API request/response types ---

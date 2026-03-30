@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scrapeWebsiteBranding } from '@/lib/firecrawl';
 
 const SECRET_KEY = process.env.LOGO_DEV_SECRET_KEY;
 const PUBLIC_KEY = process.env.LOGO_DEV_PUBLIC_KEY;
@@ -33,30 +34,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'domain is required' }, { status: 400 });
     }
 
-    try {
-      const brand = await fetchBrand(domain);
-      const colors = (brand.colors ?? []).map((c: { hex: string }) => c.hex);
-      const logoUrl = PUBLIC_KEY
-        ? `https://img.logo.dev/${domain}?token=${PUBLIC_KEY}&size=128&format=png`
-        : null;
+    const logoUrl = PUBLIC_KEY
+      ? `https://img.logo.dev/${domain}?token=${PUBLIC_KEY}&size=128&format=png`
+      : null;
 
-      return NextResponse.json({
-        name: brand.name ?? null,
-        logoUrl,
-        colors: colors.length > 0 ? colors : ['#FFFFFF'],
-      });
-    } catch {
-      const logoUrl = PUBLIC_KEY
-        ? `https://img.logo.dev/${domain}?token=${PUBLIC_KEY}&size=128&format=png`
-        : null;
+    // Run logo.dev and firecrawl in parallel
+    const [logoResult, firecrawlResult] = await Promise.allSettled([
+      fetchBrand(domain),
+      scrapeWebsiteBranding(domain),
+    ]);
 
-      return NextResponse.json({
-        name: null,
-        logoUrl,
-        colors: ['#FFFFFF'],
-      });
-    }
+    const brand = logoResult.status === 'fulfilled' ? logoResult.value : null;
+    const firecrawl = firecrawlResult.status === 'fulfilled' ? firecrawlResult.value : null;
+
+    // Merge colors from both sources, deduped
+    const logoColors = (brand?.colors ?? []).map((c: { hex: string }) => c.hex);
+    const firecrawlColors = firecrawl?.colors ?? [];
+    const allColors = [...new Set([...logoColors, ...firecrawlColors])].filter(
+      (c: string) => /^#[0-9a-fA-F]{3,8}$/.test(c),
+    );
+
+    return NextResponse.json({
+      name: brand?.name ?? null,
+      logoUrl,
+      colors: allColors.length > 0 ? allColors : ['#FFFFFF'],
+      fonts: firecrawl?.fonts ?? [],
+      ogImage: firecrawl?.ogImage ?? null,
+      websiteImages: firecrawl?.images ?? [],
+    });
   } catch {
-    return NextResponse.json({ name: null, logoUrl: null, colors: ['#FFFFFF'] });
+    return NextResponse.json({
+      name: null,
+      logoUrl: null,
+      colors: ['#FFFFFF'],
+      fonts: [],
+      ogImage: null,
+      websiteImages: [],
+    });
   }
 }

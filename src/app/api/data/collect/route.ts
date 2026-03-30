@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { fetchSignals, DATA_TEST_SIGNALS } from "@/lib/saber";
 import { searchPlaces, getPlaceDetails } from "@/lib/google-places";
 import { fetchOutscraperReviews } from "@/lib/outscraper";
 import { describeBrand } from "@/lib/logodev";
 import { enrichCompany, findEmployees } from "@/lib/waterfall";
-import type { CompanyInsight } from "@/lib/saber";
 import type { PlaceSummary, PlaceDetails } from "@/lib/types";
 import type { OutscraperPlace } from "@/lib/outscraper";
 import type { BrandData } from "@/lib/logodev";
@@ -42,7 +40,6 @@ export interface CollectResponse {
   domain: string;
   totalDurationMs: number;
   pipelines: {
-    saber: TimedResult<CompanyInsight[]> & { signalCount?: number; completedCount?: number };
     googlePlaces: TimedResult<{
       locations: PlaceSummary[];
       details: (TimedResult<PlaceDetails> & { placeId: string; displayName: string })[];
@@ -71,9 +68,8 @@ export async function POST(request: Request) {
     const brandName = domain.split(".")[0];
 
     // Phase 1: Fire all independent pipelines in parallel
-    const [saberResult, placesResult, logoResult, waterfallResult] =
+    const [placesResult, logoResult, waterfallResult] =
       await Promise.all([
-        timed(() => fetchSignals(domain, DATA_TEST_SIGNALS)),
         timed(() => searchPlaces(brandName, domain)),
         timed(() => describeBrand(domain)),
         timed(() => findEmployees(domain)),
@@ -103,16 +99,10 @@ export async function POST(request: Request) {
     ]);
 
     // Build response
-    const saberInsights = saberResult.data ?? [];
     const response: CollectResponse = {
       domain,
       totalDurationMs: Date.now() - totalStart,
       pipelines: {
-        saber: {
-          ...saberResult,
-          signalCount: saberInsights.length,
-          completedCount: saberInsights.filter((s) => s.answer !== null).length,
-        },
         googlePlaces: {
           durationMs: placesResult.durationMs + detailResults.reduce((a, d) => a + d.durationMs, 0),
           status: placesResult.status,

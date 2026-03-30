@@ -13,7 +13,7 @@ import {
   StepDone,
 } from './steps';
 import type { FetchTiming, LocationItem, ReviewItem, Step } from './types';
-import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, StaffMention, StaffAnalysis } from '@/lib/types';
+import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, ReviewInsight, ReviewAnalysis } from '@/lib/types';
 import { OnboardingProvider, useOnboarding } from '@/lib/demo-flow-context';
 
 const IGNORED_TYPES = new Set([
@@ -76,23 +76,6 @@ function OnboardingInner() {
   };
 
   const startBackgroundFetch = useCallback((domain: string) => {
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'insights', label: 'Saber Insights' } });
-    fetch('/api/company/insights', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain }),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
-        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { insights: data.insights ?? [] } });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'insights', status: 'done' } });
-      })
-      .catch((err: unknown) => {
-        dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { insights: [] } });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'insights', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
-      });
-
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'enrich', label: 'Waterfall Enrich' } });
     fetch('/api/company/enrich', {
       method: 'POST',
@@ -114,7 +97,7 @@ function OnboardingInner() {
   }, [dispatch]);
 
   const startReviewsFetch = useCallback((placeIds: string[]) => {
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Outscraper Reviews' } });
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Apify Reviews' } });
     fetch('/api/reviews', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -125,8 +108,8 @@ function OnboardingInner() {
         return res.json();
       })
       .then((data) => {
-        const outscraperReviews: ReviewItem[] = data.reviews ?? [];
-        dispatch({ type: 'MERGE_REVIEWS', payload: outscraperReviews });
+        const apifyReviews: ReviewItem[] = data.reviews ?? [];
+        dispatch({ type: 'MERGE_REVIEWS', payload: apifyReviews });
         dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'done' } });
       })
       .catch((err: unknown) => {
@@ -134,129 +117,7 @@ function OnboardingInner() {
       });
   }, [dispatch]);
 
-  const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
-    dispatch({ type: 'SET_SELECTED_PLACE', payload: place });
-    dispatch({ type: 'SET_LOADING', payload: true });
-
-    const domain = extractDomain(place.websiteUri);
-
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
-
-    try {
-      const [chainResult, brandResult] = await Promise.all([
-        fetch('/api/places/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: buildChainQuery(place),
-            ...(domain && { websiteDomain: domain }),
-          }),
-        })
-          .then((res) => res.json() as Promise<TextSearchResponse>)
-          .then((data) => { dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } }); return data; }),
-
-        domain
-          ? fetch('/api/brand', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ domain }),
-            })
-              .then((res) => res.json())
-              .then((data) => { dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } }); return data; })
-          : Promise.resolve({ name: null, logoUrl: null, colors: ['#FFFFFF'] }),
-      ]);
-
-      const brandName = brandResult.name ?? place.displayName;
-
-      const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
-        const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
-        const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
-        const locationLabel = streetName
-          ? `${brandName} - ${streetName}`
-          : p.displayName;
-
-        return {
-          id: p.placeId,
-          name: locationLabel,
-          address: p.formattedAddress,
-          countryCode: p.countryCode,
-          lat: p.location.lat,
-          lng: p.location.lng,
-        };
-      });
-
-      dispatch({ type: 'SET_LOCATIONS', payload: chainLocations });
-      domainRef.current = domain;
-
-      dispatch({
-        type: 'SET_BUSINESS',
-        payload: {
-          name: brandName,
-          logoUrl: brandResult.logoUrl ?? null,
-          domain: domain ?? '',
-          brandColors: brandResult.colors ?? ['#FFFFFF'],
-        },
-      });
-
-      const detailPlaceIds = [
-        place.placeId,
-        ...chainLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
-      ].slice(0, 10);
-
-      fetch('/api/places/details', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ placeIds: detailPlaceIds }),
-      })
-        .then((res) => res.json() as Promise<PlaceDetailsResponse>)
-        .then((data) => {
-          const allDetails = data.details ?? [];
-
-          const allReviews = allDetails.flatMap((d) =>
-            (d.reviews ?? []).map((r) => ({
-              author: r.authorName,
-              rating: r.rating,
-              text: r.text,
-              date: r.relativePublishTimeDescription,
-            })),
-          );
-          if (allReviews.length > 0) {
-            dispatch({ type: 'MERGE_REVIEWS', payload: allReviews });
-          }
-
-          const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
-          if (allPhotos.length > 0) {
-            dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
-          }
-        })
-        .catch(() => {});
-
-      dispatch({ type: 'SET_LOADING', payload: false });
-      goForward('confirm-business');
-    } catch {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  }, [dispatch]);
-
-  const handleBusinessConfirm = useCallback(
-    (data: { name: string; website: string; colors: string[] }) => {
-      if (business) {
-        dispatch({
-          type: 'UPDATE_BUSINESS',
-          payload: { name: data.name, domain: data.website, brandColors: data.colors },
-        });
-      }
-
-      const domain = domainRef.current ?? data.website;
-      startBackgroundFetch(domain);
-
-      goForward('confirm-locations');
-    },
-    [business, startBackgroundFetch, dispatch],
-  );
-
-  const startStaffAnalysisFetch = useCallback((confirmedLocs: LocationItem[]) => {
+  const startReviewAnalysisFetch = useCallback((confirmedLocs: LocationItem[], lite = true) => {
     const places: PlaceSummary[] = confirmedLocs.map((loc) => ({
       placeId: loc.id,
       displayName: loc.name,
@@ -264,22 +125,24 @@ function OnboardingInner() {
       location: { lat: loc.lat, lng: loc.lng },
     }));
 
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'staffAnalysis', label: 'Staff Analysis (SSE)' } });
+    const trackKey = lite ? 'reviewAnalysis' : 'reviewAnalysisFull';
+    const trackLabel = lite ? 'Review Analysis (SSE lite)' : 'Review Analysis (SSE full)';
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: trackKey, label: trackLabel } });
 
-    fetch('/api/demo/scan/analyze?lite=1', {
+    fetch(`/api/demo/scan/analyze${lite ? '?lite=1' : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ locations: places }),
     })
       .then(async (res) => {
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `connected (${res.status})` } });
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `connected (${res.status})` } });
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let currentEvent = '';
-        let mentionCount = 0;
+        let insightCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -310,77 +173,251 @@ function OnboardingInner() {
               try {
                 const data = JSON.parse(eventData);
                 if (eventName === 'batch_analysis') {
-                  const mentions = data.mentions as StaffMention[];
-                  mentionCount += mentions.length;
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `batch_analysis: +${mentions.length} mentions (total: ${mentionCount})` } });
-                  dispatch({ type: 'APPEND_STAFF_MENTIONS', payload: mentions });
+                  const insights = data.insights as ReviewInsight[];
+                  insightCount += insights.length;
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
+                  dispatch({ type: 'APPEND_REVIEW_INSIGHTS', payload: insights });
+                } else if (eventName === 'analysis_update') {
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis_update: preview (${data.insights?.length ?? 0} insights)` } });
+                  // Preview only — feeds the loading screen, doesn't trigger results view
+                  dispatch({ type: 'SET_REVIEW_ANALYSIS_PREVIEW', payload: data as ReviewAnalysis });
                 } else if (eventName === 'analysis') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `analysis: final (${data.mentions?.length ?? 0} mentions)` } });
-                  const analysis = data as StaffAnalysis;
-                  dispatch({ type: 'SET_STAFF_ANALYSIS', payload: analysis });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis: final (${data.insights?.length ?? 0} insights)` } });
+                  const analysisData = data as ReviewAnalysis;
+                  dispatch({ type: 'SET_REVIEW_ANALYSIS', payload: analysisData });
                 } else if (eventName === 'error') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
                 } else if (eventName === 'timing') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `timing: ${data.label} (${data.detail ?? ''})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `timing: ${data.label} (${data.detail ?? ''})` } });
                 } else if (eventName === 'reviews_progress') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
+                  dispatch({ type: 'APPEND_REVIEW_PROGRESS', payload: { placeId: data.placeId, displayName: data.displayName, reviewCount: data.reviewCount, sort: data.sort } });
                 } else if (eventName === 'done') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: 'done' } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'done' } });
                 } else {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `${eventName}` } });
+                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `${eventName}` } });
                 }
               } catch {
-                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: `parse-error: ${eventName}` } });
+                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `parse-error: ${eventName}` } });
               }
             }
           }
         }
 
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: 'staffAnalysis', event: 'stream closed' } });
+        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'stream closed' } });
 
-        // Set fallback analysis only if no analysis event was received
         dispatch({
-          type: 'SET_STAFF_ANALYSIS_FALLBACK',
+          type: 'SET_REVIEW_ANALYSIS_FALLBACK',
           payload: {
             headline: '',
             body: '',
-            standoutEmployee: null,
-            mentions: [],
+            insights: [],
             totalReviewsAnalyzed: 0,
             positiveCount: 0,
             negativeCount: 0,
-            namedEmployees: [],
+            categoryBreakdown: [],
+            strengths: [],
+            opportunities: [],
           },
         });
 
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'staffAnalysis', status: 'done' } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'done' } });
       })
       .catch((err: unknown) => {
         dispatch({
-          type: 'SET_STAFF_ANALYSIS',
+          type: 'SET_REVIEW_ANALYSIS',
           payload: {
             headline: '',
             body: '',
-            standoutEmployee: null,
-            mentions: [],
+            insights: [],
             totalReviewsAnalyzed: 0,
             positiveCount: 0,
             negativeCount: 0,
-            namedEmployees: [],
+            categoryBreakdown: [],
+            strengths: [],
+            opportunities: [],
           },
         });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'staffAnalysis', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
       });
   }, [dispatch]);
 
+  const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
+    dispatch({ type: 'SET_SELECTED_PLACE', payload: place });
+    dispatch({ type: 'SET_LOADING', payload: true });
+
+    const domain = extractDomain(place.websiteUri);
+
+    // Fire primary location review scrape immediately (parallel with everything else)
+    const primaryLoc: LocationItem = {
+      id: place.placeId,
+      name: place.displayName,
+      address: place.formattedAddress,
+      countryCode: place.countryCode,
+      lat: place.location.lat,
+      lng: place.location.lng,
+      userRatingCount: place.userRatingCount,
+      rating: place.rating,
+    };
+    startReviewsFetch([place.placeId]);
+    startReviewAnalysisFetch([primaryLoc]);
+
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
+
+    try {
+      // Fire brand fetch in background (don't block navigation)
+      const brandPromise = domain
+        ? fetch('/api/brand', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } });
+              dispatch({
+                type: 'SET_BUSINESS',
+                payload: {
+                  name: data.name ?? place.displayName,
+                  logoUrl: data.logoUrl ?? null,
+                  domain: domain ?? '',
+                  brandColors: data.colors ?? ['#FFFFFF'],
+                  fonts: data.fonts ?? [],
+                  ogImage: data.ogImage ?? null,
+                  websiteImages: data.websiteImages ?? [],
+                },
+              });
+            })
+            .catch(() => {
+              dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'error' } });
+            })
+        : null;
+
+      // Await chain discovery only — it's faster
+      const chainResult = await fetch('/api/places/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: buildChainQuery(place),
+          ...(domain && { websiteDomain: domain }),
+        }),
+      }).then((res) => res.json() as Promise<TextSearchResponse>);
+      dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } });
+
+      const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
+        const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
+        const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
+        const locationLabel = streetName
+          ? `${place.displayName} - ${streetName}`
+          : p.displayName;
+
+        return {
+          id: p.placeId,
+          name: locationLabel,
+          address: p.formattedAddress,
+          countryCode: p.countryCode,
+          lat: p.location.lat,
+          lng: p.location.lng,
+          userRatingCount: p.userRatingCount,
+          rating: p.rating,
+        };
+      });
+
+      const filteredLocations = domain
+        ? chainLocations
+        : chainLocations.filter(loc => !place.countryCode || loc.countryCode === place.countryCode);
+
+      const selectedCountry = place.countryCode;
+      filteredLocations.sort((a, b) => {
+        if (a.countryCode === selectedCountry && b.countryCode !== selectedCountry) return -1;
+        if (b.countryCode === selectedCountry && a.countryCode !== selectedCountry) return 1;
+        return (a.countryCode ?? '').localeCompare(b.countryCode ?? '');
+      });
+
+      dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
+      domainRef.current = domain;
+
+      // Set initial business with place name (brand fetch will update when ready)
+      if (!brandPromise) {
+        dispatch({
+          type: 'SET_BUSINESS',
+          payload: {
+            name: place.displayName,
+            logoUrl: null,
+            domain: domain ?? '',
+            brandColors: ['#FFFFFF'],
+          },
+        });
+      }
+
+      // Fire place details in background
+      const detailPlaceIds = [
+        place.placeId,
+        ...filteredLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
+      ].slice(0, 10);
+
+      fetch('/api/places/details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeIds: detailPlaceIds }),
+      })
+        .then((res) => res.json() as Promise<PlaceDetailsResponse>)
+        .then((data) => {
+          const allDetails = data.details ?? [];
+          const allReviews = allDetails.flatMap((d) =>
+            (d.reviews ?? []).map((r) => ({
+              author: r.authorName,
+              rating: r.rating,
+              text: r.text,
+              date: r.relativePublishTimeDescription,
+            })),
+          );
+          if (allReviews.length > 0) {
+            dispatch({ type: 'MERGE_REVIEWS', payload: allReviews });
+          }
+          const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
+          if (allPhotos.length > 0) {
+            dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
+          }
+        })
+        .catch(() => {});
+
+      dispatch({ type: 'SET_LOADING', payload: false });
+      goForward('confirm-locations'); // Locations first (chain data ready), business second (brand still loading)
+    } catch {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [dispatch, startReviewsFetch, startReviewAnalysisFetch]);
+
+  const handleBusinessConfirm = useCallback(
+    (data: { name: string; website: string; colors: string[] }) => {
+      if (business) {
+        dispatch({
+          type: 'UPDATE_BUSINESS',
+          payload: { name: data.name, domain: data.website, brandColors: data.colors },
+        });
+      }
+
+      const domain = domainRef.current ?? data.website;
+      startBackgroundFetch(domain);
+
+      goForward('gathering'); // Business → Gathering
+    },
+    [business, startBackgroundFetch, dispatch],
+  );
+
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
-    startReviewsFetch(confirmedLocs.map((l) => l.id));
-    startStaffAnalysisFetch(confirmedLocs);
-  }, [startReviewsFetch, startStaffAnalysisFetch]);
+    // Scrape all confirmed chain locations (full mode, no lite)
+    if (confirmedLocs.length > 0) {
+      startReviewsFetch(confirmedLocs.map((l) => l.id));
+      startReviewAnalysisFetch(confirmedLocs, false);
+    }
+  }, [startReviewsFetch, startReviewAnalysisFetch]);
 
   const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
     dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
-    goForward('gathering');
+    goForward('confirm-business'); // Locations → Business (brand data loading in background)
   }, [dispatch]);
 
   const handleGatheringComplete = useCallback(() => {
@@ -388,13 +425,34 @@ function OnboardingInner() {
   }, []);
 
   const handleBack = useCallback(() => {
-    if (step === 'confirm-locations') {
-      goBack('confirm-business');
-    } else if (step === 'confirm-business') {
+    if (step === 'confirm-business') {
+      goBack('confirm-locations');
+    } else if (step === 'confirm-locations') {
       goBack('search');
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [step, dispatch]);
+
+  // Generate feed posts when analysis is ready
+  const feedPostsGeneratedRef = useRef(false);
+  useEffect(() => {
+    if (!gatheringData.reviewAnalysis || feedPostsGeneratedRef.current) return;
+    if (!business?.name) return;
+    feedPostsGeneratedRef.current = true;
+
+    fetch('/api/demo/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessName: business.name, analysis: gatheringData.reviewAnalysis }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.posts?.length > 0) {
+          dispatch({ type: 'SET_FEED_POSTS', payload: data.posts });
+        }
+      })
+      .catch(() => {});
+  }, [gatheringData.reviewAnalysis, business?.name, dispatch]);
 
   const showBack = step === 'confirm-business' || step === 'confirm-locations';
   const showLogo = step === 'search';

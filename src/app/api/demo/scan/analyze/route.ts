@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { fetchOutscraperReviews } from "@/lib/outscraper";
+import { fetchApifyReviews, mapSort, type ApifyReview } from "@/lib/apify-reviews";
 import { getPlaceDetails } from "@/lib/google-places";
-import type { PlaceSummary, StaffAnalysis, StaffMention } from "@/lib/types";
+import type { PlaceSummary, ReviewAnalysis, ReviewInsight, CategoryBreakdown } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -19,25 +19,93 @@ interface ReviewForAnalysis {
   locationName: string;
 }
 
-const PER_LOCATION_PROMPT = `Analyze these customer reviews for ONE location. Find mentions of staff, employees, and service quality.
+// ── Category definitions ────────────────────────────────────────────
 
-Extract ONLY staff/service-related reviews. Skip reviews about food, decor, prices with no staff mention.
+interface CategoryDef {
+  id: string;
+  module: string;
+  label: string;
+  keywords: RegExp;
+  prompt: string;
+}
+
+const CATEGORIES: CategoryDef[] = [
+  {
+    id: "service-attitude",
+    module: "Chat & Newsfeed",
+    label: "Service & Hospitality",
+    keywords: /staff|waiter|waitress|server|service|friendly|rude|attentive|welcoming|ignored|helpful|unhelpful|polite|impolite|smile|attitude|hospitality|accommodat|looked after|felt forgotten|walked past/i,
+    prompt: `These reviews likely mention SERVICE & HOSPITALITY. For each review, confirm if it contains a signal about staff friendliness, attentiveness, or service attitude. Extract the relevant excerpt.
+Positive: friendly, welcoming, attentive, staff praised by name, "looked after us"
+Negative: ignored, rude, unhelpful, "no one came to our table", "felt forgotten"`,
+  },
+  {
+    id: "speed-efficiency",
+    module: "To-Do's & Handbooks",
+    label: "Speed & Efficiency",
+    keywords: /slow|fast|quick|wait|waited|waiting|took forever|prompt|speedy|efficient|long time|ages|delay|hurry|minutes/i,
+    prompt: `These reviews likely mention SPEED & EFFICIENCY. For each review, confirm if it contains a signal about service speed, wait times, or operational efficiency. Extract the relevant excerpt.
+Positive: fast service, food came quickly, prompt, efficient
+Negative: slow, waited ages, took forever, long wait, had to ask multiple times`,
+  },
+  {
+    id: "training-knowledge",
+    module: "Learning & Development",
+    label: "Training & Knowledge",
+    keywords: /recommend|suggestion|explained|wrong order|mix up|mixed up|mistake|forgot|forgotten|confused|knew|knowledge|trained|inexperienced|new staff|didn't know|couldn't answer/i,
+    prompt: `These reviews likely mention TRAINING & KNOWLEDGE. For each review, confirm if it contains a signal about staff knowledge, training, order accuracy, or recommendations. Extract the relevant excerpt.
+Positive: great recommendations, knew the menu, explained everything
+Negative: got order wrong, didn't know ingredients, seemed unsure, mistake`,
+  },
+  {
+    id: "consistency",
+    module: "Learning & Development",
+    label: "Consistency Across Locations",
+    keywords: /branch|other location|inconsistent|different from|last time|compared to|used to be|varies|varying|standards/i,
+    prompt: `These reviews likely mention CONSISTENCY ACROSS LOCATIONS. For each review, confirm if it compares this location to others, mentions inconsistent quality, or references different standards. Extract the relevant excerpt.`,
+  },
+  {
+    id: "dietary-safety",
+    module: "Compliance & Safety",
+    label: "Dietary & Allergen Handling",
+    keywords: /allerg|vegan|vegetarian|gluten|dietary|intolerance|coeliac|celiac|cross-contam|hygiene|clean|dirty|food safety/i,
+    prompt: `These reviews likely mention DIETARY & ALLERGEN HANDLING. For each review, confirm if it contains a signal about allergen accommodation, dietary options handling, hygiene, or food safety. Extract the relevant excerpt.
+Positive: clearly labelled, accommodated allergies, great vegan options
+Negative: couldn't confirm allergens, wrong dish, cross-contamination, hygiene concern`,
+  },
+  {
+    id: "staffing",
+    module: "People & HRIS",
+    label: "Staffing & Team",
+    keywords: /understaffed|short-staffed|overwhelmed|only one|not enough|overworked|manager|turnover|short.staff/i,
+    prompt: `These reviews likely mention STAFFING issues. For each review, confirm if it contains a signal about understaffing, overworked team, management issues, or team morale. Extract the relevant excerpt.`,
+  },
+];
+
+// ── Prompts ─────────────────────────────────────────────────────────
+
+function buildCategoryPrompt(cat: CategoryDef): string {
+  return `${cat.prompt}
+
+Category: "${cat.id}", Module: "${cat.module}"
+
+For each review that DOES contain a signal, return it as an insight. Skip reviews that don't actually contain a clear signal for this category.
 
 Return valid JSON:
 {
-  "mentions": [
+  "insights": [
     {
       "reviewAuthor": string,
-      "reviewText": string (full text),
+      "reviewText": string (full review text),
       "reviewRating": number (1-5),
       "reviewDate": string,
       "sentiment": "positive" | "negative",
-      "staffNames": string[] (employee first names, empty if generic like "the waiter"),
-      "relevantExcerpt": string (the specific sentence about staff),
-      "locationName": string
+      "category": "${cat.id}",
+      "relevantExcerpt": string (exact quote from review),
+      "locationName": string,
+      "allgravyModule": "${cat.module}"
     }
   ],
-  "namedEmployees": string[],
   "positiveCount": number,
   "negativeCount": number,
   "totalReviewsAnalyzed": number
@@ -45,23 +113,40 @@ Return valid JSON:
 
 Reviews:
 `;
+}
 
-const MERGE_PROMPT = `You have staff analysis summaries from multiple locations of the same business. Create a unified headline and body.
+const MERGE_PROMPT = `You have operational insights extracted from customer reviews across multiple locations. Create a summary that frames findings as opportunities for an internal team platform.
+
+Categories map to platform modules:
+- "service-attitude" → Chat & Newsfeed (internal team communication)
+- "speed-efficiency" → To-Do's & Handbooks (task management, SOPs, checklists)
+- "training-knowledge" → Learning & Development (training courses, knowledge base)
+- "consistency" → Learning & Development (standardized training across locations)
+- "dietary-safety" → Compliance & Safety (allergen training, food safety)
+- "staffing" → People & HRIS (scheduling, retention, team management)
 
 Rules:
-- headline: Max 12 words, punchy, action-oriented. Frame around the best-mentioned employee name if one exists (e.g. "Make every shift feel like Sarah's"). Never generic.
-- body: 2-3 sentences. Connect findings to the business opportunity — great staff = standard to replicate, complaints = training gap. Actionable and solvable.
-- standoutEmployee: Most positively mentioned employee name, or null.
+- headline: Max 12 words. Specific to this business. Highlight the strongest positive AND the biggest opportunity.
+- body: 2-3 sentences. Acknowledge what's working, then frame the top 1-2 problems as solvable with the right internal tools. No jargon.
+- strengths: Top 2-3 things customers consistently praise about the team/operations (short phrases)
+- opportunities: Top 2-3 actionable improvements tied to a platform module (e.g. "Service speed via task checklists", "Allergen confidence via compliance training")
+- categoryBreakdown: For each category found, calculate percentage of total insights and whether it's mostly positive, negative, or mixed.
 
 Return valid JSON:
 {
   "headline": string,
   "body": string,
-  "standoutEmployee": string | null
+  "strengths": string[],
+  "opportunities": string[],
+  "categoryBreakdown": [
+    { "category": string, "allgravyModule": string, "percentage": number, "count": number, "sentiment": "mostly-positive" | "mostly-negative" | "mixed" }
+  ]
 }
 
-Here are the per-location summaries:
+Here are the insights:
 `;
+
+// ── Helpers ─────────────────────────────────────────────────────────
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -71,11 +156,38 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-async function analyzeBatch(
-  reviews: ReviewForAnalysis[]
+// Bucket reviews by likely category using keywords
+function bucketReviews(reviews: ReviewForAnalysis[]): Map<CategoryDef, ReviewForAnalysis[]> {
+  const buckets = new Map<CategoryDef, ReviewForAnalysis[]>();
+  for (const cat of CATEGORIES) {
+    buckets.set(cat, []);
+  }
+
+  for (const r of reviews) {
+    // Low-rated reviews go to all matching buckets (high signal)
+    // High-rated reviews go to the first matching bucket
+    let matched = false;
+    for (const cat of CATEGORIES) {
+      if (cat.keywords.test(r.text)) {
+        buckets.get(cat)!.push(r);
+        matched = true;
+        if (r.rating > 2) break; // high-rated: first match only
+      }
+    }
+    // Low-rated with no keyword match still get analyzed (service-attitude default)
+    if (!matched && r.rating <= 2) {
+      buckets.get(CATEGORIES[0])!.push(r);
+    }
+  }
+
+  return buckets;
+}
+
+async function analyzeCategoryBatch(
+  cat: CategoryDef,
+  reviews: ReviewForAnalysis[],
 ): Promise<{
-  mentions: StaffMention[];
-  namedEmployees: string[];
+  insights: ReviewInsight[];
   positiveCount: number;
   negativeCount: number;
   totalReviewsAnalyzed: number;
@@ -92,7 +204,8 @@ async function analyzeBatch(
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
-    messages: [{ role: "user", content: PER_LOCATION_PROMPT + reviewsText }],
+    system: [{ type: "text", text: buildCategoryPrompt(cat), cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: reviewsText }],
   });
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
@@ -102,17 +215,17 @@ async function analyzeBatch(
   try {
     const parsed = JSON.parse(jsonMatch[0]);
     return {
-      mentions: (parsed.mentions ?? []).map((m: StaffMention) => ({
+      insights: (parsed.insights ?? []).map((m: ReviewInsight) => ({
         reviewAuthor: m.reviewAuthor ?? "",
         reviewText: m.reviewText ?? "",
         reviewRating: m.reviewRating ?? 0,
         reviewDate: m.reviewDate ?? "",
         sentiment: m.sentiment ?? "positive",
-        staffNames: m.staffNames ?? [],
+        category: cat.id,
         relevantExcerpt: m.relevantExcerpt ?? "",
         locationName: m.locationName ?? "",
+        allgravyModule: cat.module,
       })),
-      namedEmployees: parsed.namedEmployees ?? [],
       positiveCount: parsed.positiveCount ?? 0,
       negativeCount: parsed.negativeCount ?? 0,
       totalReviewsAnalyzed: parsed.totalReviewsAnalyzed ?? reviews.length,
@@ -122,22 +235,25 @@ async function analyzeBatch(
   }
 }
 
-async function runMerge(mentions: StaffMention[]): Promise<{
+async function runMerge(insights: ReviewInsight[]): Promise<{
   headline: string;
   body: string;
-  standoutEmployee: string | null;
+  strengths: string[];
+  opportunities: string[];
+  categoryBreakdown: CategoryBreakdown[];
 }> {
-  const summaryText = mentions
+  const summaryText = insights
     .map(
       (m) =>
-        `[${m.sentiment.toUpperCase()}] ${m.locationName} — "${m.relevantExcerpt}" (staff: ${m.staffNames.join(", ") || "unnamed"})`
+        `[${m.sentiment.toUpperCase()}] ${m.locationName} — "${m.relevantExcerpt}" (category: ${m.category}, module: ${m.allgravyModule})`
     )
     .join("\n");
 
   const mergeMessage = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 512,
-    messages: [{ role: "user", content: MERGE_PROMPT + summaryText }],
+    model: "claude-sonnet-4-5-20250929",
+    max_tokens: 1024,
+    system: [{ type: "text", text: MERGE_PROMPT, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: summaryText }],
   });
 
   const mergeText =
@@ -150,25 +266,32 @@ async function runMerge(mentions: StaffMention[]): Promise<{
       return {
         headline: parsed.headline ?? "",
         body: parsed.body ?? "",
-        standoutEmployee: parsed.standoutEmployee ?? null,
+        strengths: parsed.strengths ?? [],
+        opportunities: parsed.opportunities ?? [],
+        categoryBreakdown: (parsed.categoryBreakdown ?? []).map((c: CategoryBreakdown) => ({
+          category: c.category ?? "",
+          allgravyModule: c.allgravyModule ?? "",
+          percentage: c.percentage ?? 0,
+          count: c.count ?? 0,
+          sentiment: c.sentiment ?? "mixed",
+        })),
       };
     } catch {
       // fall through
     }
   }
-  return { headline: "", body: "", standoutEmployee: null };
+  return { headline: "", body: "", strengths: [], opportunities: [], categoryBreakdown: [] };
 }
 
-// The 3 Outscraper calls we fire per location, independently
-const REVIEW_FETCHES_FULL: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
-  { limit: 50, sort: "newest" },
-  { limit: 25, sort: "lowest_rating" },
-  { limit: 25, sort: "highest_rating" },
-];
+// ── Review fetch configs ────────────────────────────────────────────
+// Fan out: 1 Apify call per location per sort order. Each returns fast (~3-5s for 50 reviews).
+// As each returns, immediately bucket + Haiku classify. No waiting for all reviews.
 
-const REVIEW_FETCHES_LITE: { limit: number; sort: "newest" | "lowest_rating" | "highest_rating" }[] = [
-  { limit: 30, sort: "newest" },
-];
+const SORTS_FULL: ("newest" | "lowest_rating" | "highest_rating")[] = ["newest", "lowest_rating", "highest_rating"];
+const SORTS_LITE: ("newest" | "lowest_rating" | "highest_rating")[] = ["newest"];
+const REVIEWS_PER_CALL = 50; // sweet spot: fast Apify response + enough material for Haiku
+
+// ── Main handler ────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
@@ -178,7 +301,6 @@ export async function POST(request: Request) {
     locations: PlaceSummary[];
   };
 
-  // In lite mode, cap to 1 location for speed
   const locations = lite ? rawLocations.slice(0, 1) : rawLocations;
 
   if (!locations?.length) {
@@ -191,15 +313,13 @@ export async function POST(request: Request) {
       const emit = (event: string, data: unknown) =>
         controller.enqueue(encoder.encode(sseEvent(event, data)));
 
-      // t0 = pipeline start, all timing offsets relative to this
       const t0 = Date.now();
-      const ts = () => Date.now() - t0; // ms since pipeline start
+      const ts = () => Date.now() - t0;
 
       try {
-        const reviewFetches = lite ? REVIEW_FETCHES_LITE : REVIEW_FETCHES_FULL;
-        const batchSize = lite ? 20 : 5;
+        const sorts = lite ? SORTS_LITE : SORTS_FULL;
 
-        // Start place details fetch immediately in parallel (skip in lite mode)
+        // Start place details fetch in parallel (skip in lite mode)
         let detailsPromise: Promise<(Awaited<ReturnType<typeof getPlaceDetails>> | null)[]> | null = null;
         if (!lite) {
           const detailsStart = ts();
@@ -217,199 +337,180 @@ export async function POST(request: Request) {
           });
         }
 
-        const allMentions: StaffMention[] = [];
-        const allNamedEmployees: string[] = [];
+        const allInsights: ReviewInsight[] = [];
         let totalPositive = 0;
         let totalNegative = 0;
         let totalReviews = 0;
-        let preliminaryMergeFired = false;
-        let preliminaryMergePromise: Promise<void> | null = null;
+        let mergeVersion = 0;
         let batchCounter = 0;
+        let lastMergedCount = 0;
 
-        const processLocation = async (loc: PlaceSummary) => {
-          const seen = new Set<string>();
-          let locationReviewCount = 0;
-          let locationBatchIndex = 0;
+        const locMap = new Map(locations.map((loc) => [loc.placeId, loc]));
+        const seen = new Set<string>();
 
-          const analyzeWave = async (reviews: ReviewForAnalysis[], sort: string) => {
-            if (!reviews.length) return;
-            const batches = chunkArray(reviews, batchSize);
-            await Promise.all(
-              batches.map(async (batch) => {
-                const idx = locationBatchIndex++;
-                const globalIdx = batchCounter++;
-                const batchStart = ts();
-                const result = await analyzeBatch(batch);
-                emit("timing", {
-                  id: `haiku_batch_${globalIdx}`,
-                  label: `Haiku batch #${globalIdx}`,
-                  startMs: batchStart,
-                  endMs: ts(),
-                  detail: `${batch.length} reviews → ${result?.mentions.length ?? 0} mentions (${sort})`,
-                  parent: `outscraper_${loc.placeId}_${sort}`,
-                });
+        // Incremental Sonnet merges on a 5s interval (decoupled from everything)
+        const mergeInterval = setInterval(async () => {
+          if (allInsights.length > lastMergedCount) {
+            const version = ++mergeVersion;
+            const snapshot = [...allInsights];
+            lastMergedCount = snapshot.length;
+            const mergeStart = ts();
+            try {
+              const merged = await runMerge(snapshot);
+              emit("timing", {
+                id: `merge_v${version}`,
+                label: `Sonnet merge v${version}`,
+                startMs: mergeStart,
+                endMs: ts(),
+                detail: `${snapshot.length} insights`,
+              });
+              emit("analysis_update", {
+                ...merged,
+                insights: snapshot,
+                totalReviewsAnalyzed: totalReviews,
+                positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
+                negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
+              });
+            } catch {
+              // Will retry on next interval
+            }
+          }
+        }, 5000);
 
-                if (result && result.mentions.length > 0) {
-                  allMentions.push(...result.mentions);
-                  allNamedEmployees.push(...result.namedEmployees);
-                  totalPositive += result.positiveCount;
-                  totalNegative += result.negativeCount;
-                  totalReviews += result.totalReviewsAnalyzed;
+        // ── FAN-OUT: 1 Apify call per location × sort order ──────────
+        // Each call returns fast (~3-5s). As each lands, immediately
+        // bucket + Haiku classify. No waiting for all reviews.
 
-                  emit("batch_analysis", {
-                    placeId: loc.placeId,
-                    displayName: loc.displayName,
-                    batchIndex: idx,
-                    mentions: result.mentions,
-                    namedEmployees: result.namedEmployees,
-                  });
+        const allPromises: Promise<void>[] = [];
 
-                  // Fire preliminary merge as soon as we have first mentions (skip in lite)
-                  if (!lite && !preliminaryMergeFired && allMentions.length > 0) {
-                    preliminaryMergeFired = true;
-                    const snapshot = [...allMentions];
-                    const prelimStart = ts();
-                    preliminaryMergePromise = runMerge(snapshot).then((merged) => {
-                      emit("timing", {
-                        id: "preliminary_merge",
-                        label: "Preliminary merge (Haiku)",
-                        startMs: prelimStart,
-                        endMs: ts(),
-                        detail: `${snapshot.length} mentions`,
-                      });
-                      const prelimAnalysis: StaffAnalysis = {
-                        ...merged,
-                        mentions: snapshot,
-                        totalReviewsAnalyzed: totalReviews,
-                        positiveCount: snapshot.filter((m) => m.sentiment === "positive").length,
-                        negativeCount: snapshot.filter((m) => m.sentiment === "negative").length,
-                        namedEmployees: [...new Set(snapshot.flatMap((m) => m.staffNames))],
-                      };
-                      emit("preliminary_analysis", prelimAnalysis);
-                    }).catch(() => {});
-                  }
-                }
-              })
-            );
-          };
+        for (const loc of locations) {
+          for (const sort of sorts) {
+            allPromises.push(
+              (async () => {
+                const fetchStart = ts();
+                try {
+                  const apifySort = mapSort(sort);
+                  const reviews = await fetchApifyReviews([loc.placeId], REVIEWS_PER_CALL, apifySort, 20);
 
-          // Fire Outscraper calls concurrently, process each as it lands
-          await Promise.all(
-            reviewFetches.map(async ({ limit, sort }) => {
-              const fetchStart = ts();
-              try {
-                const place = await Promise.race([
-                  fetchOutscraperReviews(loc.placeId, limit, sort),
-                  new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Outscraper timeout (60s)')), 60000)),
-                ]);
-
-                const rawCount = place?.reviews_data?.length ?? 0;
-
-                // Dedupe against reviews we already have from other sort orders
-                const newReviews: ReviewForAnalysis[] = [];
-                for (const r of place?.reviews_data ?? []) {
-                  if (!r.review_text) continue;
-                  const key = `${r.autor_id}|${r.review_timestamp}`;
-                  if (!seen.has(key)) {
+                  // Dedupe and convert
+                  const newReviews: ReviewForAnalysis[] = [];
+                  for (const r of reviews) {
+                    const key = `${r.reviewerId}|${r.publishedAtDate}`;
+                    if (seen.has(key)) continue;
                     seen.add(key);
                     newReviews.push({
-                      author: r.autor_name,
-                      rating: r.review_rating,
-                      text: r.review_text,
-                      date: r.review_datetime_utc,
+                      author: r.reviewerName,
+                      rating: r.stars,
+                      text: r.text,
+                      date: r.publishedAtDate,
                       locationName: loc.displayName,
                     });
                   }
+
+                  emit("timing", {
+                    id: `apify_${loc.placeId}_${sort}`,
+                    label: `Apify ${loc.displayName} ${sort}`,
+                    startMs: fetchStart,
+                    endMs: ts(),
+                    detail: `${reviews.length} raw → ${newReviews.length} new`,
+                  });
+
+                  emit("reviews_progress", {
+                    placeId: loc.placeId,
+                    displayName: loc.displayName,
+                    reviewCount: newReviews.length,
+                    sort,
+                  });
+
+                  if (newReviews.length === 0) return;
+
+                  // Immediately bucket + Haiku classify this batch
+                  const buckets = bucketReviews(newReviews);
+                  const haikuPromises: Promise<void>[] = [];
+
+                  for (const cat of CATEGORIES) {
+                    const catReviews = buckets.get(cat)!;
+                    if (catReviews.length === 0) continue;
+
+                    // Chunk into batches of 10
+                    const batches = chunkArray(catReviews, 10);
+                    for (const batch of batches) {
+                      haikuPromises.push(
+                        (async () => {
+                          const batchIdx = batchCounter++;
+                          const batchStart = ts();
+                          const result = await analyzeCategoryBatch(cat, batch);
+
+                          emit("timing", {
+                            id: `haiku_${cat.id}_${batchIdx}`,
+                            label: `Haiku ${cat.label}`,
+                            startMs: batchStart,
+                            endMs: ts(),
+                            detail: `${batch.length} reviews → ${result?.insights.length ?? 0} insights`,
+                          });
+
+                          if (result && result.insights.length > 0) {
+                            allInsights.push(...result.insights);
+                            totalPositive += result.positiveCount;
+                            totalNegative += result.negativeCount;
+                            totalReviews += result.totalReviewsAnalyzed;
+
+                            emit("batch_analysis", {
+                              placeId: loc.placeId,
+                              displayName: loc.displayName,
+                              batchIndex: batchIdx,
+                              insights: result.insights,
+                            });
+                          }
+                        })()
+                      );
+                    }
+                  }
+
+                  // Fire all Haiku batches for this fetch in parallel
+                  await Promise.all(haikuPromises);
+                } catch (err) {
+                  emit("timing", {
+                    id: `apify_${loc.placeId}_${sort}`,
+                    label: `Apify ${loc.displayName} ${sort}`,
+                    startMs: fetchStart,
+                    endMs: ts(),
+                    detail: `FAILED: ${err instanceof Error ? err.message : String(err)}`,
+                    error: true,
+                  });
                 }
-
-                const fetchEnd = ts();
-                emit("timing", {
-                  id: `outscraper_${loc.placeId}_${sort}`,
-                  label: `Outscraper ${sort}`,
-                  startMs: fetchStart,
-                  endMs: fetchEnd,
-                  detail: `${rawCount} raw → ${newReviews.length} new (limit ${limit})`,
-                  parent: `location_${loc.placeId}`,
-                });
-
-                locationReviewCount += newReviews.length;
-
-                emit("reviews_progress", {
-                  placeId: loc.placeId,
-                  displayName: loc.displayName,
-                  reviewCount: locationReviewCount,
-                  sort,
-                });
-
-                // Immediately analyze this wave
-                await analyzeWave(newReviews, sort);
-              } catch (err) {
-                emit("timing", {
-                  id: `outscraper_${loc.placeId}_${sort}`,
-                  label: `Outscraper ${sort}`,
-                  startMs: fetchStart,
-                  endMs: ts(),
-                  detail: `FAILED: ${err instanceof Error ? err.message : String(err)}`,
-                  parent: `location_${loc.placeId}`,
-                  error: true,
-                });
-              }
-            })
-          );
-
-          emit("timing", {
-            id: `location_${loc.placeId}`,
-            label: `Location: ${loc.displayName}`,
-            startMs: 0, // will be set by first child
-            endMs: ts(),
-            detail: `${locationReviewCount} reviews, ${locationBatchIndex} batches`,
-          });
-        };
-
-        // In lite mode run all locations concurrently, otherwise batch by 5
-        if (lite) {
-          await Promise.all(locations.map(processLocation));
-        } else {
-          for (let i = 0; i < locations.length; i += 5) {
-            await Promise.all(locations.slice(i, i + 5).map(processLocation));
+              })()
+            );
           }
         }
 
-        emit("reviews_complete", { totalReviews });
+        // Wait for ALL fan-out branches to complete
+        await Promise.all(allPromises);
+        clearInterval(mergeInterval);
 
-        // Wait for preliminary merge to finish before final merge
-        if (preliminaryMergePromise) await preliminaryMergePromise;
-
-        // Final merge with ALL mentions
-        let staffAnalysis: StaffAnalysis | null = null;
-
-        if (allMentions.length > 0) {
-          emit("analyzing", {});
-          const mergeStart = ts();
-          const merged = await runMerge(allMentions);
+        // ── Final Sonnet merge with all insights ──
+        if (allInsights.length > 0) {
+          const finalStart = ts();
+          const merged = await runMerge(allInsights);
           emit("timing", {
             id: "final_merge",
-            label: "Final merge (Haiku)",
-            startMs: mergeStart,
+            label: "Final Sonnet merge",
+            startMs: finalStart,
             endMs: ts(),
-            detail: `${allMentions.length} mentions`,
+            detail: `${allInsights.length} insights (final)`,
           });
 
-          const dedupedEmployees = [...new Set(allNamedEmployees)];
-
-          staffAnalysis = {
+          const reviewAnalysis: ReviewAnalysis = {
             ...merged,
-            mentions: allMentions,
+            insights: allInsights,
             totalReviewsAnalyzed: totalReviews,
             positiveCount: totalPositive,
             negativeCount: totalNegative,
-            namedEmployees: dedupedEmployees,
           };
-
-          emit("analysis", staffAnalysis);
+          emit("analysis", reviewAnalysis);
         }
 
-        // Await place details (skip in lite mode)
+        // Await place details
         let locationDetails: (Awaited<ReturnType<typeof getPlaceDetails>> | null)[] = [];
         if (detailsPromise) {
           const detailsResults = await detailsPromise;
@@ -423,14 +524,24 @@ export async function POST(request: Request) {
           label: "Total pipeline",
           startMs: 0,
           endMs: ts(),
-          detail: `${locations.length} locations, ${totalReviews} reviews, ${allMentions.length} mentions`,
+          detail: `${locations.length} locations, ${seen.size} reviews, ${allInsights.length} insights`,
         });
 
         emit("done", {
           place: locations[0],
           locations,
           locationDetails,
-          staffAnalysis,
+          reviewAnalysis: allInsights.length > 0 ? {
+            headline: "",
+            body: "",
+            insights: allInsights,
+            totalReviewsAnalyzed: totalReviews,
+            positiveCount: totalPositive,
+            negativeCount: totalNegative,
+            categoryBreakdown: [],
+            strengths: [],
+            opportunities: [],
+          } : null,
         });
       } catch (err) {
         emit("error", { message: String(err) });
