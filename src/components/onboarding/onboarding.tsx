@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,9 @@ const floatPineapple = {
 export function Onboarding() {
   return (
     <OnboardingProvider>
-      <OnboardingInner />
+      <Suspense>
+        <OnboardingInner />
+      </Suspense>
     </OnboardingProvider>
   );
 }
@@ -62,8 +65,10 @@ function OnboardingInner() {
   const { state, dispatch } = useOnboarding();
   const { step, loading, selectedPlace, business, locations, gatheringData, fetchTimings } = state;
 
+  const searchParams = useSearchParams();
   const directionRef = useRef(1);
   const domainRef = useRef<string | undefined>(undefined);
+  const autoSubmittedRef = useRef(false);
 
   const goForward = (next: Step) => {
     directionRef.current = 1;
@@ -389,6 +394,30 @@ function OnboardingInner() {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [dispatch, startReviewsFetch, startReviewAnalysisFetch]);
+
+  // Auto-submit when URL params are present (e.g. ?place_id=...&name=...&address=...)
+  useEffect(() => {
+    if (autoSubmittedRef.current) return;
+
+    const placeId = searchParams.get('place_id');
+    const name = searchParams.get('name');
+    if (!placeId || !name) return;
+
+    autoSubmittedRef.current = true;
+
+    const place: PlaceSummary = {
+      placeId,
+      displayName: name,
+      formattedAddress: searchParams.get('address') ?? '',
+      websiteUri: searchParams.get('website') ?? undefined,
+      location: {
+        lat: parseFloat(searchParams.get('lat') ?? '0'),
+        lng: parseFloat(searchParams.get('lng') ?? '0'),
+      },
+    };
+
+    handleSearchSubmit(place);
+  }, [searchParams, handleSearchSubmit]);
 
   const handleBusinessConfirm = useCallback(
     (data: { name: string; website: string; colors: string[] }) => {
