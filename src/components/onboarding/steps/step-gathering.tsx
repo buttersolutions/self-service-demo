@@ -42,8 +42,8 @@ const PHASES: PhaseConfig[] = [
   {
     id: 'reviews',
     searchText: (name) => `Collecting ${name} reviews...`,
-    minDurationMs: 12000,
-    maxDurationMs: 20000,
+    minDurationMs: 25000,
+    maxDurationMs: 30000,
     dataReady: (data) => data.reviews !== null,
   },
   {
