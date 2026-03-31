@@ -395,6 +395,7 @@ function OnboardingInner() {
   }, [dispatch, startReviewsFetch, startReviewAnalysisFetch]);
 
   // Auto-submit when URL params are present (e.g. ?place_id=...&name=...&address=...)
+  // Fetches full place details from Google first so chain discovery has website/location data
   useEffect(() => {
     if (autoSubmittedRef.current) return;
 
@@ -403,20 +404,46 @@ function OnboardingInner() {
     if (!placeId || !name) return;
 
     autoSubmittedRef.current = true;
+    dispatch({ type: 'SET_LOADING', payload: true });
 
-    const place: PlaceSummary = {
-      placeId,
-      displayName: name,
-      formattedAddress: searchParams.get('address') ?? '',
-      websiteUri: searchParams.get('website') ?? undefined,
-      location: {
-        lat: parseFloat(searchParams.get('lat') ?? '0'),
-        lng: parseFloat(searchParams.get('lng') ?? '0'),
-      },
-    };
-
-    handleSearchSubmit(place);
-  }, [searchParams, handleSearchSubmit]);
+    // Enrich from Google Places so we get websiteUri, countryCode, proper lat/lng
+    fetch('/api/places/details', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placeIds: [placeId] }),
+    })
+      .then((res) => res.json() as Promise<PlaceDetailsResponse>)
+      .then((data) => {
+        const detail = data.details?.[0];
+        const place: PlaceSummary = {
+          placeId,
+          displayName: detail?.displayName ?? name,
+          formattedAddress: detail?.formattedAddress ?? searchParams.get('address') ?? '',
+          websiteUri: detail?.websiteUri ?? searchParams.get('website') ?? undefined,
+          countryCode: detail?.countryCode,
+          userRatingCount: detail?.userRatingCount,
+          rating: detail?.rating,
+          location: detail?.location ?? {
+            lat: parseFloat(searchParams.get('lat') ?? '0'),
+            lng: parseFloat(searchParams.get('lng') ?? '0'),
+          },
+        };
+        handleSearchSubmit(place);
+      })
+      .catch(() => {
+        // Fallback: use URL params as-is
+        handleSearchSubmit({
+          placeId,
+          displayName: name,
+          formattedAddress: searchParams.get('address') ?? '',
+          websiteUri: searchParams.get('website') ?? undefined,
+          location: {
+            lat: parseFloat(searchParams.get('lat') ?? '0'),
+            lng: parseFloat(searchParams.get('lng') ?? '0'),
+          },
+        });
+      });
+  }, [searchParams, handleSearchSubmit, dispatch]);
 
   const handleBusinessConfirm = useCallback(
     (data: { name: string; website: string; colors: string[] }) => {
