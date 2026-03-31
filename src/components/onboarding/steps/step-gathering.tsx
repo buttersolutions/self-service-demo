@@ -7,14 +7,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { TypewriterSearch } from '../ui/typewriter-search';
 import { GatheringSidebar, type SidebarStep } from '../animations/gathering-sidebar';
 import { GatheringMap } from '../animations/gathering-map';
-// GatheringReviews removed — analysis component handles the full phase
+import { GatheringReviews } from '../animations/gathering-reviews';
 import { GatheringStaffAnalysis } from '../animations/gathering-staff-analysis';
 import { GatheringPhotos } from '../animations/gathering-photos';
 import { GatheringBrandedApp } from '../animations/gathering-branded-app';
 import type { GatheringData } from '../types';
 import { useOnboarding } from '@/lib/demo-flow-context';
 
-type PhaseId = 'locations' | 'photos' | 'reviews-analysis' | 'branded-app';
+type PhaseId = 'locations' | 'photos' | 'reviews' | 'reviews-analysis' | 'branded-app';
 
 interface PhaseConfig {
   id: PhaseId;
@@ -40,6 +40,13 @@ const PHASES: PhaseConfig[] = [
     dataReady: () => false, // Controlled by GatheringPhotos onComplete
   },
   {
+    id: 'reviews',
+    searchText: (name) => `Collecting ${name} reviews...`,
+    minDurationMs: 12000,
+    maxDurationMs: 20000,
+    dataReady: (data) => data.reviews !== null,
+  },
+  {
     id: 'reviews-analysis',
     searchText: (name) => `Analysing ${name} reviews...`,
     minDurationMs: Infinity,
@@ -58,6 +65,7 @@ const PHASES: PhaseConfig[] = [
 const SIDEBAR_STEPS: SidebarStep[] = [
   { id: 'locations', label: 'Mapping locations', description: 'Plotting your locations on the map' },
   { id: 'photos', label: 'Analysing images', description: 'Analysing business imagery' },
+  { id: 'reviews', label: 'Collecting reviews', description: 'Reading what customers say' },
   { id: 'reviews-analysis', label: 'Analysing reviews', description: 'Extracting insights from customer feedback' },
   { id: 'branded-app', label: 'Your branded app', description: 'Personalizing your experience' },
 ];
@@ -101,7 +109,7 @@ export function StepGathering({
   onComplete,
 }: StepGatheringProps) {
   const { state } = useOnboarding();
-  const { business, locations, gatheringData } = state;
+  const { business, locations, gatheringData, fetchTimings } = state;
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [completedPhaseIds, setCompletedPhaseIds] = useState<Set<string>>(new Set());
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -224,20 +232,30 @@ export function StepGathering({
     }
   }, [autoAdvance, advancePhase]);
 
-  // Analysis sub-phase complete → user must manually advance to branded-app via Next button
   const handleAnalysisComplete = useCallback(() => {
-    // Disabled auto-advance: let user read the analysis results
+    if (autoAdvance) {
+      advancePhase();
+    }
   }, [autoAdvance, advancePhase]);
 
   const renderAnimation = () => {
     switch (currentPhase.id) {
       case 'locations':
         return <GatheringMap locations={locations} isActive />;
-      case 'reviews-analysis':
+      case 'reviews':
+        return (
+          <GatheringReviews
+            reviews={gatheringData.reviews}
+            isActive
+          />
+        );
+      case 'reviews-analysis': {
+        // Only show results once the full analysis SSE stream is complete
+        const fullDone = fetchTimings.reviewAnalysisFull?.status === 'done' || fetchTimings.reviewAnalysisFull?.status === 'error';
         return (
           <GatheringStaffAnalysis
             mentions={gatheringData.reviewInsights}
-            analysis={gatheringData.reviewAnalysis}
+            analysis={fullDone ? gatheringData.reviewAnalysis : null}
             analysisPreview={gatheringData.reviewAnalysisPreview}
             reviews={gatheringData.reviews}
             progress={gatheringData.reviewProgress}
@@ -245,6 +263,7 @@ export function StepGathering({
             onComplete={handleAnalysisComplete}
           />
         );
+      }
       case 'photos':
         return (
           <GatheringPhotos
@@ -296,7 +315,7 @@ export function StepGathering({
 
       {/* Full-bleed content area */}
       <div className="w-full h-full relative overflow-hidden">
-        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews-analysis' || currentPhase.id === 'photos') && (
+        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews' || currentPhase.id === 'reviews-analysis' || currentPhase.id === 'photos') && (
           <div className="absolute top-4 z-30 w-full max-w-md px-6" style={{ left: 'calc(50% + 140px)', transform: 'translateX(-50%)' }}>
             <TypewriterSearch key={currentPhase.id} text={searchText} />
           </div>
@@ -319,7 +338,7 @@ export function StepGathering({
         </AnimatePresence>
 
         {/* Scan line — on map and reviews collection */}
-        {currentPhase.id === 'locations' && (
+        {(currentPhase.id === 'locations' || currentPhase.id === 'reviews') && (
           <motion.div
             key={`scan-${currentPhase.id}`}
             className="absolute left-0 right-0 h-[2px] z-20 pointer-events-none"

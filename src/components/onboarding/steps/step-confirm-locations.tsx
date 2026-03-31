@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Loader2 } from 'lucide-react';
-import { OnboardingButton, OnboardingInput } from '../ui';
+import { OnboardingButton, OnboardingInput, PaginationDots } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,13 +11,11 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 
 import type { LocationItem } from '../types';
 
-const BUTTON_LOADING_MS = 3000;
-
 interface StepConfirmLocationsProps {
   direction: number;
   locations: LocationItem[];
   onEarlyStart?: (locations: LocationItem[]) => void;
-  onConfirm: (locations: LocationItem[]) => void;
+  onConfirm: (locations: LocationItem[]) => void | Promise<void>;
 }
 
 let nextId = 100;
@@ -170,13 +168,13 @@ export function StepConfirmLocations({
   onConfirm,
 }: StepConfirmLocationsProps) {
   const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
-  const [buttonLoading, setButtonLoading] = useState(false);
   const [showAddInput, setShowAddInput] = useState(false);
+  const [buttonLoading, setButtonLoading] = useState(false);
 
-  const handleGetApp = useCallback(() => {
+  const handleGetApp = useCallback(async () => {
     setButtonLoading(true);
     onEarlyStart?.(locations);
-    setTimeout(() => onConfirm(locations), BUTTON_LOADING_MS);
+    await onConfirm(locations);
   }, [locations, onConfirm, onEarlyStart]);
 
   const removeLocation = (id: string) => {
@@ -266,12 +264,16 @@ Are these all your locations?        </h1>
           {buttonLoading ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="size-4 animate-spin" />
-              Preparing...
+              Loading your brand...
             </span>
           ) : (
             'Get my branded app'
           )}
         </OnboardingButton>
+      </motion.div>
+
+      <motion.div variants={childVariants}>
+        <PaginationDots total={3} current={1} className="mt-auto pt-16" />
       </motion.div>
     </motion.div>
   );

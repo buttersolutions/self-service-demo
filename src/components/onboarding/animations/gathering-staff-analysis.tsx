@@ -1,411 +1,476 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Star, ThumbsUp, ThumbsDown, TrendingUp, AlertTriangle, Loader2, Search } from 'lucide-react';
-import type { ReviewInsight, ReviewAnalysis, CategoryBreakdown } from '@/lib/types';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence, type Transition } from 'framer-motion';
+import type { ReviewInsight, ReviewAnalysis } from '@/lib/types';
 import type { ReviewItem, ReviewProgressEvent } from '../types';
+import { SquaresBackground } from './squares-background';
 
 interface GatheringStaffAnalysisProps {
   mentions: ReviewInsight[];
   analysis: ReviewAnalysis | null;
-  analysisPreview: ReviewAnalysis | null;
-  reviews: ReviewItem[] | null;
-  progress: ReviewProgressEvent[];
-  isActive: boolean;
+  analysisPreview?: ReviewAnalysis | null;
+  reviews?: ReviewItem[] | null;
+  progress?: ReviewProgressEvent[];
+  isActive?: boolean;
   onComplete?: () => void;
 }
 
 // ── Small UI pieces ─────────────────────────────────────────────────
 
-function TypewriterText({
-  text,
-  delay = 0,
-  speed = 20,
-  onDone,
+// Adapted from reactbits.dev BlurText — words blur-deblur in one by one
+function BlurText({
+  text = '',
+  delay = 150,
+  className = '',
+  direction = 'bottom',
+  onAnimationComplete,
 }: {
-  text: string;
+  text?: string;
   delay?: number;
-  speed?: number;
-  onDone?: () => void;
+  className?: string;
+  direction?: 'top' | 'bottom';
+  onAnimationComplete?: () => void;
 }) {
-  const [displayed, setDisplayed] = useState('');
-  const [started, setStarted] = useState(false);
+  const words = useMemo(() => text.split(' '), [text]);
+  const [inView, setInView] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setStarted(true), delay);
-    return () => clearTimeout(t);
-  }, [delay]);
+    if (!ref.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.unobserve(ref.current as Element);
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
 
-  useEffect(() => {
-    if (!started) return;
-    let i = 0;
-    const interval = setInterval(() => {
-      i++;
-      if (i <= text.length) {
-        setDisplayed(text.slice(0, i));
-      } else {
-        clearInterval(interval);
-        onDone?.();
-      }
-    }, speed);
-    return () => clearInterval(interval);
-  }, [started, text, speed, onDone]);
+  const from = useMemo(
+    () =>
+      direction === 'top'
+        ? { filter: 'blur(10px)', opacity: 0, y: -30 }
+        : { filter: 'blur(10px)', opacity: 0, y: 30 },
+    [direction],
+  );
 
-  if (!started) return null;
+  const to = useMemo(
+    () => [
+      { filter: 'blur(4px)', opacity: 0.6, y: direction === 'top' ? 4 : -4 },
+      { filter: 'blur(0px)', opacity: 1, y: 0 },
+    ],
+    [direction],
+  );
+
+  const buildKeyframes = useCallback(
+    (fromVal: Record<string, string | number>, steps: Record<string, string | number>[]) => {
+      const keys = new Set([...Object.keys(fromVal), ...steps.flatMap((s) => Object.keys(s))]);
+      const kf: Record<string, (string | number)[]> = {};
+      keys.forEach((k) => {
+        kf[k] = [fromVal[k], ...steps.map((s) => s[k])];
+      });
+      return kf;
+    },
+    [],
+  );
+
+  const keyframes = useMemo(() => buildKeyframes(from, to), [buildKeyframes, from, to]);
 
   return (
-    <span>
-      {displayed}
-      {displayed.length < text.length && (
-        <motion.span
-          className="inline-block w-[2px] h-[1em] bg-gray-400 ml-0.5 align-text-bottom"
-          animate={{ opacity: [1, 0] }}
-          transition={{ duration: 0.5, repeat: Infinity }}
-        />
-      )}
+    <span ref={ref} className={className} style={{ display: 'flex', flexWrap: 'wrap' }}>
+      {words.map((word, index) => {
+        const transition: Transition = {
+          duration: 0.5,
+          times: [0, 0.5, 1],
+          delay: (index * delay) / 1000,
+        };
+
+        return (
+          <motion.span
+            key={index}
+            initial={from}
+            animate={inView ? keyframes : from}
+            transition={transition}
+            onAnimationComplete={index === words.length - 1 ? onAnimationComplete : undefined}
+            style={{ display: 'inline-block', willChange: 'transform, filter, opacity' }}
+          >
+            {word}
+            {index < words.length - 1 && '\u00A0'}
+          </motion.span>
+        );
+      })}
     </span>
   );
 }
 
-function ProgressCard({ text, icon }: { text: string; icon: 'search' | 'insight' | 'loading' }) {
-  const Icon = icon === 'search' ? Search : icon === 'insight' ? TrendingUp : Loader2;
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-3 border border-gray-100 shadow-sm"
-    >
-      <div className="size-8 rounded-lg bg-[#625CE4]/10 flex items-center justify-center shrink-0">
-        <Icon className={`size-4 text-[#625CE4] ${icon === 'loading' ? 'animate-spin' : ''}`} />
-      </div>
-      <span className="text-sm text-gray-700">{text}</span>
-    </motion.div>
-  );
-}
 
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Star
-          key={i}
-          className={`size-3 ${
-            i < rating
-              ? 'fill-amber-400 text-amber-400'
-              : 'fill-gray-200 text-gray-200'
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
 
-function StrengthCard({ strength, quote, index }: { strength: string; quote?: string; index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.15, duration: 0.4 }}
-      className="bg-emerald-50/80 border border-emerald-100 rounded-xl p-4"
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <ThumbsUp className="size-4 text-emerald-600" />
-        <span className="text-sm font-semibold text-emerald-800">{strength}</span>
-      </div>
-      {quote && (
-        <p className="text-xs text-emerald-700/70 italic leading-relaxed">
-          &ldquo;{quote}&rdquo;
-        </p>
-      )}
-    </motion.div>
-  );
-}
+const AVATAR_COLORS = [
+  { bg: '#C4F0D5', text: '#1B7A3D' },
+  { bg: '#D8DAF9', text: '#3F3ABF' },
+  { bg: '#F2C4E0', text: '#9B2D6B' },
+  { bg: '#BEF5EF', text: '#1A7A6D' },
+  { bg: '#FDE6C4', text: '#8B5E1A' },
+  { bg: '#C4DEF0', text: '#1A5E8B' },
+];
 
-function IssueCard({ breakdown, insights, index }: { breakdown: CategoryBreakdown; insights: ReviewInsight[]; index: number }) {
-  const relevantInsights = insights
-    .filter((i) => i.category === breakdown.category && i.sentiment === 'negative')
-    .slice(0, 2);
+const CARD_ROTATIONS = [-1.5, 1, -0.8, 1.2, -1, 0.6];
 
-  const countDisplay = breakdown.count >= 10
-    ? `${breakdown.count} reviews`
-    : `${Math.round(breakdown.percentage)}%`;
+function ReviewCard({
+  insight,
+  delayMs,
+  cardIndex,
+  module,
+}: {
+  insight: ReviewInsight;
+  delayMs: number;
+  cardIndex: number;
+  module: string;
+}) {
+  const rotate = CARD_ROTATIONS[cardIndex % CARD_ROTATIONS.length];
+  const displayText = insight.relevantExcerpt.length > 180
+    ? insight.relevantExcerpt.slice(0, 180) + '...'
+    : insight.relevantExcerpt;
+
+  const author = (insight.reviewAuthor && insight.reviewAuthor !== 'undefined')
+    ? insight.reviewAuthor
+    : 'Anonymous';
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.15, duration: 0.4 }}
-      className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm"
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="size-4 text-amber-500" />
-          <span className="text-sm font-semibold text-gray-900 capitalize">
-            {breakdown.category.replace(/-/g, ' ')}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#625CE4]/10 text-[#625CE4]">
-            {breakdown.allgravyModule}
-          </span>
-          <span className="text-lg font-bold text-gray-900">{countDisplay}</span>
-        </div>
-      </div>
-
-      <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
-        <motion.div
-          className="h-full rounded-full bg-amber-400"
-          initial={{ width: 0 }}
-          animate={{ width: `${Math.min(breakdown.percentage, 100)}%` }}
-          transition={{ delay: index * 0.15 + 0.3, duration: 0.6, ease: 'easeOut' }}
-        />
-      </div>
-
-      {relevantInsights.length > 0 && (
-        <div className="space-y-2">
-          {relevantInsights.map((insight, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <div className="size-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-semibold text-gray-500 shrink-0 mt-0.5">
-                {(insight.reviewAuthor ?? '?').charAt(0).toUpperCase()}
-              </div>
-              <p className="text-xs text-gray-500 leading-relaxed italic">
-                &ldquo;{insight.relevantExcerpt}&rdquo;
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-// ── Review card for the initial reviews phase ───────────────────────
-
-function ReviewCard({ review, index }: { review: ReviewItem; index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9, y: -10 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 28, delay: index * 0.15 }}
-      className="bg-white rounded-2xl p-4 border border-gray-100"
+      initial={{ opacity: 0, y: 30, rotate: rotate * 3, scale: 0.92 }}
+      animate={{ opacity: 1, y: 0, rotate, scale: 1 }}
+      transition={{ delay: delayMs / 1000, type: 'spring', stiffness: 260, damping: 20 }}
+      className="relative bg-white rounded-2xl p-4 border border-gray-100 min-w-[320px] max-w-[320px] shrink-0 flex flex-col"
       style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.03)' }}
     >
-      <div className="flex items-center gap-2.5 mb-2">
-        <div className="size-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-500 shrink-0">
-          {(review.author ?? '?').charAt(0).toUpperCase()}
+      {/* Category badge — top right */}
+      <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-[11px] font-sans font-medium px-2 py-0.5 rounded-md bg-white border border-gray-200 shadow-sm text-gray-600 capitalize">
+        <span className={`size-1.5 rounded-full ${MODULE_DOT_COLORS[module] ?? 'bg-gray-400'}`} />
+        {insight.category.replace(/-/g, ' ')}
+      </span>
+
+      <div className="flex items-center gap-2.5 mb-2 pr-24">
+        <div
+          className="size-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+          style={{
+            backgroundColor: AVATAR_COLORS[cardIndex % AVATAR_COLORS.length].bg,
+            color: AVATAR_COLORS[cardIndex % AVATAR_COLORS.length].text,
+            border: '0.5px solid rgba(0,0,0,0.1)',
+          }}
+        >
+          {author.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
           <span className="text-[13px] font-medium text-gray-700 block truncate">
-            {review.author ?? 'Anonymous'}
+            {author}
           </span>
-          <div className="flex items-center gap-1.5">
-            <StarRating rating={review.rating} />
-            {review.rating >= 4 ? (
-              <ThumbsUp className="size-3.5 text-green-400" />
-            ) : review.rating <= 2 ? (
-              <ThumbsDown className="size-3.5 text-red-400" />
-            ) : null}
-          </div>
         </div>
       </div>
-      <p className="text-[13px] leading-relaxed text-gray-500 line-clamp-3">
-        {review.text}
+      <p className="text-[13px] leading-relaxed text-gray-500 line-clamp-6 mb-4">
+        &ldquo;{displayText}&rdquo;
       </p>
+      <div className="flex items-center gap-1 mt-auto pt-3 border-t border-gray-50">
+        <svg viewBox="0 0 24 24" className="size-3 opacity-50" fill="none">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        <span className="text-[10px] text-gray-400 font-medium">Google</span>
+      </div>
     </motion.div>
   );
 }
 
+
+function AnalysisResults({
+  analysis,
+  mentions,
+  sortedBreakdown,
+  onScrollStart,
+  onComplete,
+}: {
+  analysis: ReviewAnalysis;
+  mentions: ReviewInsight[];
+  sortedBreakdown: ReviewAnalysis['categoryBreakdown'];
+  onScrollStart: () => void;
+  onComplete?: () => void;
+}) {
+  const strengthsText = `Customers love ${analysis.strengths.slice(0, 3).map((s) => s.toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' and $1')}. These are your strongest areas.`;
+  const areasIntroText = 'However, we found areas that need attention:';
+
+  // Steps: 0=headline, 1=strengths, 2=areasIntro, 3=1st section (immediate),
+  //         4=start scroll + wait 3.5s, 5=2nd section + wait 3.5s, 6=3rd section, ..., last=summary
+  const [step, setStep] = useState(0);
+  const sectionCount = sortedBreakdown.length;
+  const firstSectionStep = 3;
+  const summaryStep = firstSectionStep + sectionCount;
+
+  // 0 → 1: headline done
+  const onHeadlineDone = useCallback(() => setStep(1), []);
+  // 1 → 2: strengths done
+  const onStrengthsDone = useCallback(() => setStep(2), []);
+  // 2 → 3: areas intro done → show 1st section immediately
+  const onAreasIntroDone = useCallback(() => setStep(3), []);
+
+  // 3: 1st section visible → wait for cards to land (~4s), start scroll, then show next section
+  useEffect(() => {
+    if (step !== firstSectionStep) return;
+    // Start scroll after all 3 cards in first section have landed (3 * 1200ms + buffer)
+    const scrollTimer = setTimeout(() => onScrollStart(), 4000);
+    // Show next section 3.5s after scroll starts
+    const nextTimer = setTimeout(() => setStep((s) => s + 1), 7500);
+    return () => { clearTimeout(scrollTimer); clearTimeout(nextTimer); };
+  }, [step, onScrollStart]);
+
+  // 4+: each subsequent section waits 3.5s then shows next
+  useEffect(() => {
+    if (step <= firstSectionStep || step >= firstSectionStep + sectionCount) return;
+    const t = setTimeout(() => setStep((s) => s + 1), 3500);
+    return () => clearTimeout(t);
+  }, [step, sectionCount]);
+
+  // After all sections shown, wait 2s then show summary
+  useEffect(() => {
+    if (step !== firstSectionStep + sectionCount) return;
+    const t = setTimeout(() => setStep(summaryStep), 2000);
+    return () => clearTimeout(t);
+  }, [step, sectionCount, summaryStep]);
+
+  // Auto-navigate to last step 8s after summary is shown
+  useEffect(() => {
+    if (step !== summaryStep) return;
+    const t = setTimeout(() => onComplete?.(), 8000);
+    return () => clearTimeout(t);
+  }, [step, summaryStep, onComplete]);
+
+  const visibleSections = Math.max(0, step - firstSectionStep + 1); // 1 at step 3, 2 at step 4, etc.
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className="relative z-10 px-12 pt-24 pb-[50vh]"
+    >
+      {/* 1. Headline */}
+      <div className="mb-8">
+        <BlurText
+          text={analysis.headline}
+          delay={120}
+          direction="bottom"
+          className="text-3xl font-light text-gray-800 leading-relaxed font-serif"
+          onAnimationComplete={onHeadlineDone}
+        />
+      </div>
+
+      {/* 2. Strengths — after headline done */}
+      {step >= 1 && analysis.strengths.length > 0 && (
+        <motion.div
+          className="mb-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <BlurText
+            text={strengthsText}
+            delay={60}
+            direction="bottom"
+            className="text-lg text-gray-600 leading-relaxed font-serif"
+            onAnimationComplete={onStrengthsDone}
+          />
+        </motion.div>
+      )}
+
+      {/* 3. "However..." — after strengths done */}
+      {step >= 2 && sortedBreakdown.length > 0 && (
+        <div className="mb-10">
+          <motion.div
+            className="mb-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <BlurText
+              text={areasIntroText}
+              delay={60}
+              direction="bottom"
+              className="text-lg text-gray-600 font-serif"
+              onAnimationComplete={onAreasIntroDone}
+            />
+          </motion.div>
+
+          {/* 5-7. Review sections — revealed one by one */}
+          <div className="space-y-14">
+            {sortedBreakdown.map((breakdown, i) => {
+              if (i >= visibleSections) return null;
+              const relevantInsights = mentions
+                .filter((m) => m.category === breakdown.category && m.sentiment === 'negative')
+                .slice(0, 3);
+              return (
+                <motion.div
+                  key={breakdown.category}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <p className="text-base text-gray-600 mb-8 font-serif">
+                    <strong className="text-gray-700 capitalize">
+                      {breakdown.category.replace(/-/g, ' ')}
+                    </strong>
+                    {' '}
+                    <span className="text-gray-400">
+                      ({breakdown.count >= 10
+                        ? <>{breakdown.count} mentions</>
+                        : <>{Math.round(breakdown.percentage)}% of negative feedback</>
+                      })
+                    </span>
+                    <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-sans font-medium px-2.5 py-0.5 rounded-md bg-white border border-gray-200 shadow-sm text-gray-700 align-middle">
+                      <span className={`size-1.5 rounded-full ${MODULE_DOT_COLORS[breakdown.allgravyModule] ?? 'bg-gray-400'}`} />
+                      {breakdown.allgravyModule}
+                    </span>
+                  </p>
+                  <div className="flex gap-4 flex-wrap">
+                    {relevantInsights.map((insight, j) => (
+                      <ReviewCard
+                        key={j}
+                        insight={insight}
+                        delayMs={j * 1200}
+                        cardIndex={i * 3 + j}
+                        module={breakdown.allgravyModule}
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 8. Closing summary — after all sections shown */}
+      {step >= summaryStep && analysis.body && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <BlurText
+            text={analysis.body}
+            delay={60}
+            direction="bottom"
+            className="text-lg font-light text-gray-500 leading-relaxed font-serif"
+          />
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
+
+const MODULE_DOT_COLORS: Record<string, string> = {
+  'Chat & Newsfeed': 'bg-blue-500',
+  "To-Do's & Handbooks": 'bg-amber-500',
+  'Learning & Development': 'bg-emerald-500',
+  'Compliance & Safety': 'bg-red-500',
+  'People & HRIS': 'bg-violet-500',
+};
+
 // ── Main component ──────────────────────────────────────────────────
 
-type Phase = 'reviews' | 'analyzing' | 'results';
-
-export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, reviews, progress, isActive, onComplete }: GatheringStaffAnalysisProps) {
-  const [phase, setPhase] = useState<Phase>('reviews');
+export function GatheringStaffAnalysis({ mentions, analysis, onComplete }: GatheringStaffAnalysisProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const completeCalledRef = useRef(false);
-  const mountedAtRef = useRef(Date.now());
-  const [visibleReviewCount, setVisibleReviewCount] = useState(0);
+  const scrollingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
   const isDataReady = analysis !== null;
-  const reviewList = reviews ?? [];
 
-  // Phase 1 → 2: Show review cards for 6s, then collapse into analyzing
+  // Called by AnalysisResults when it's time to start scrolling
+  const startScroll = useCallback(() => {
+    if (scrollingRef.current) return;
+    scrollingRef.current = true;
+    const scroll = () => {
+      if (!scrollingRef.current || !scrollRef.current) return;
+      const s = scrollRef.current;
+      // Only scroll if there's content below the fold
+      if (s.scrollTop + s.clientHeight < s.scrollHeight - 2) {
+        s.scrollTop += 0.2;
+      }
+      // Keep the loop running — new content will appear over time
+      rafRef.current = requestAnimationFrame(scroll);
+    };
+    rafRef.current = requestAnimationFrame(scroll);
+  }, []);
+
   useEffect(() => {
-    if (phase !== 'reviews' || !isActive) return;
-    const timer = setTimeout(() => setPhase('analyzing'), 6000);
-    return () => clearTimeout(timer);
-  }, [phase, isActive]);
-
-  // Stagger review card reveals during phase 1
-  useEffect(() => {
-    if (phase !== 'reviews' || !isActive) return;
-    const max = Math.min(reviewList.length, 6);
-    if (visibleReviewCount >= max) return;
-    const timer = setTimeout(() => {
-      setVisibleReviewCount((prev) => prev + 1);
-    }, visibleReviewCount === 0 ? 300 : 800);
-    return () => clearTimeout(timer);
-  }, [phase, isActive, visibleReviewCount, reviewList.length]);
-
-  // Phase 2 → 3: Transition to results when final analysis arrives
-  useEffect(() => {
-    if (phase !== 'analyzing' || !isDataReady) return;
-    // Small delay so the last progress cards are visible
-    const timer = setTimeout(() => setPhase('results'), 800);
-    return () => clearTimeout(timer);
-  }, [phase, isDataReady]);
-
-  // If analysis arrives while still in reviews phase, go to analyzing first (don't skip)
-  useEffect(() => {
-    if (phase !== 'reviews' || !isDataReady) return;
-    // Data arrived fast — still show reviews for a bit, then go through analyzing briefly
-    const elapsed = Date.now() - mountedAtRef.current;
-    const remaining = Math.max(0, 4000 - elapsed);
-    const timer = setTimeout(() => setPhase('analyzing'), remaining);
-    return () => clearTimeout(timer);
-  }, [phase, isDataReady]);
-
-  // Preview data from incremental Sonnet merges
-  const previewHeadline = analysisPreview?.headline;
-  const previewStrengths = analysisPreview?.strengths ?? [];
-  const previewOpportunities = analysisPreview?.opportunities ?? [];
-
-  // Build progress messages
-  const progressMessages = React.useMemo(() => {
-    const msgs: Array<{ text: string; icon: 'search' | 'insight' | 'loading' }> = [];
-    const byLocation = new Map<string, ReviewProgressEvent>();
-    for (const p of progress) {
-      byLocation.set(p.placeId, p);
-    }
-    for (const p of byLocation.values()) {
-      msgs.push({ text: `Collected ${p.reviewCount} reviews from ${p.displayName}`, icon: 'search' });
-    }
-    if (mentions.length > 0) {
-      const categories = new Set(mentions.map((m) => m.category));
-      msgs.push({ text: `Found ${mentions.length} insights across ${categories.size} categories`, icon: 'insight' });
-    }
-    if (progress.length > 0 && !analysis) {
-      msgs.push({ text: 'Running analysis...', icon: 'loading' });
-    }
-    return msgs;
-  }, [progress, mentions, analysis]);
+    return () => {
+      scrollingRef.current = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   const isEmpty = isDataReady && mentions.length === 0 && !analysis.headline;
-  const positiveInsights = mentions.filter((m) => m.sentiment === 'positive');
   const sortedBreakdown = analysis?.categoryBreakdown
     ?.filter((c) => c.sentiment !== 'mostly-positive')
-    .sort((a, b) => b.percentage - a.percentage) ?? [];
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 3) ?? [];
 
   return (
     <div
       ref={scrollRef}
       className="w-full h-full overflow-y-auto overflow-x-hidden relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
     >
-      {/* ── Phase 1: Review Cards ────────────────────────────────── */}
+      {/* Loading — waiting for analysis data */}
       <AnimatePresence>
-        {phase === 'reviews' && (
+        {!isDataReady && (
           <motion.div
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center px-8"
-            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 z-10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <motion.h2
-              className="text-xl font-light text-gray-800 font-serif tracking-tight mb-6"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              Reading your reviews...
-            </motion.h2>
-            <div className="w-full max-w-lg space-y-3">
-              <AnimatePresence>
-                {reviewList.slice(0, visibleReviewCount).map((review, i) => (
-                  <ReviewCard key={`review-${i}`} review={review} index={0} />
-                ))}
-              </AnimatePresence>
+            <SquaresBackground
+              direction="diagonal"
+              speed={0.3}
+              borderColor="rgba(98, 92, 228, 0.08)"
+              squareSize={40}
+              hoverFillColor="rgba(98, 92, 228, 0.04)"
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-8" style={{ paddingLeft: 280 }}>
+              <motion.div className="w-full max-w-md">
+                <div className="flex items-center gap-3 mb-6">
+                  <motion.div
+                    className="size-2.5 rounded-full bg-[#625CE4]"
+                    animate={{ opacity: [0.3, 1, 0.3], scale: [0.9, 1.1, 0.9] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                  <h2 className="text-xl font-light text-gray-800 font-serif tracking-tight">
+                    Analysing reviews
+                  </h2>
+                </div>
+
+                <motion.p
+                  className="text-sm text-gray-400"
+                  animate={{ opacity: [0.4, 0.8, 0.4] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  This may take a moment...
+                </motion.p>
+              </motion.div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Phase 2: Analyzing (progress cards + preview) ────────── */}
+      {/* Empty state */}
       <AnimatePresence>
-        {phase === 'analyzing' && (
-          <motion.div
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center px-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.5 }}
-          >
-            <motion.div className="w-full max-w-md">
-              <div className="flex items-center gap-3 mb-6">
-                <motion.div
-                  className="size-2.5 rounded-full bg-[#625CE4]"
-                  animate={{ opacity: [0.3, 1, 0.3], scale: [0.9, 1.1, 0.9] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <h2 className="text-xl font-light text-gray-800 font-serif tracking-tight">
-                  Analysing reviews
-                </h2>
-              </div>
-
-              {/* Preview headline from incremental merges */}
-              <AnimatePresence mode="wait">
-                {previewHeadline && (
-                  <motion.div
-                    key={previewHeadline}
-                    className="mb-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-100 shadow-sm"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.4 }}
-                  >
-                    <div className="text-lg font-serif text-gray-800 leading-snug mb-2">
-                      {previewHeadline}
-                    </div>
-                    {previewStrengths.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-1.5">
-                        {previewStrengths.map((s, i) => (
-                          <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {previewOpportunities.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {previewOpportunities.map((o, i) => (
-                          <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                            {o}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Live progress cards */}
-              <div className="space-y-2">
-                {progressMessages.map((msg, i) => (
-                  <ProgressCard key={`${msg.text}-${i}`} text={msg.text} icon={msg.icon} />
-                ))}
-                {progressMessages.length === 0 && !previewHeadline && (
-                  <ProgressCard text="Connecting to review sources..." icon="loading" />
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Phase 3: Results ─────────────────────────────────────── */}
-      <AnimatePresence>
-        {phase === 'results' && isEmpty && (
+        {isDataReady && isEmpty && (
           <div className="absolute inset-0 z-10 flex items-center justify-center">
             <span className="text-sm text-gray-400">No operational insights found</span>
           </div>
@@ -413,119 +478,14 @@ export function GatheringStaffAnalysis({ mentions, analysis, analysisPreview, re
       </AnimatePresence>
 
       <AnimatePresence>
-        {phase === 'results' && !isEmpty && analysis && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            className="relative z-10 px-12 pt-16 pb-[40vh]"
-          >
-            {/* Headline */}
-            <motion.div
-              className="mb-8"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="text-3xl font-light text-gray-800 leading-relaxed font-serif">
-                <TypewriterText text={analysis.headline} speed={25} />
-              </div>
-            </motion.div>
-
-            {/* Strengths */}
-            {analysis.strengths.length > 0 && (
-              <motion.div
-                className="mb-8"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.5, duration: 0.4 }}
-              >
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 mb-3">
-                  What customers love
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {analysis.strengths.map((strength, i) => {
-                    const matchingInsight = positiveInsights.find((ins) =>
-                      ins.relevantExcerpt.toLowerCase().includes(strength.toLowerCase().split(' ')[0])
-                    );
-                    return (
-                      <StrengthCard
-                        key={strength}
-                        strength={strength}
-                        quote={matchingInsight?.relevantExcerpt}
-                        index={i}
-                      />
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Issues */}
-            {sortedBreakdown.length > 0 && (
-              <motion.div
-                className="mb-8"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 2.5, duration: 0.4 }}
-              >
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 mb-3">
-                  Areas for improvement
-                </div>
-                <div className="grid gap-3">
-                  {sortedBreakdown.map((breakdown, i) => (
-                    <IssueCard
-                      key={breakdown.category}
-                      breakdown={breakdown}
-                      insights={mentions}
-                      index={i}
-                    />
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Body summary */}
-            {analysis.body && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 3.5, duration: 0.5 }}
-              >
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#625CE4]/60 mb-2">
-                  Summary
-                </div>
-                <p className="text-lg font-light text-gray-600 leading-relaxed font-serif">
-                  {analysis.body}
-                </p>
-              </motion.div>
-            )}
-
-            {/* Stats bar */}
-            <motion.div
-              className="flex items-center gap-6 mt-8 pt-6 border-t border-gray-100"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 4, duration: 0.4 }}
-            >
-              <div>
-                <div className="text-2xl font-bold text-gray-900">{analysis.totalReviewsAnalyzed}</div>
-                <div className="text-xs text-gray-400">reviews analyzed</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-emerald-600">{analysis.positiveCount}</div>
-                <div className="text-xs text-gray-400">positive</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-amber-500">{analysis.negativeCount}</div>
-                <div className="text-xs text-gray-400">needs attention</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-[#625CE4]">{analysis.categoryBreakdown.length}</div>
-                <div className="text-xs text-gray-400">areas identified</div>
-              </div>
-            </motion.div>
-          </motion.div>
+        {isDataReady && !isEmpty && analysis && (
+          <AnalysisResults
+            analysis={analysis}
+            mentions={mentions}
+            sortedBreakdown={sortedBreakdown}
+            onScrollStart={startScroll}
+            onComplete={onComplete}
+          />
         )}
       </AnimatePresence>
     </div>

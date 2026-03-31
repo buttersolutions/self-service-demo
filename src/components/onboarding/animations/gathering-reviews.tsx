@@ -11,7 +11,7 @@ interface GatheringReviewsProps {
 }
 
 const FIRST_REVEAL_DELAY_MS = 400;
-const REVEAL_INTERVAL_MS = 5000;
+const REVEAL_INTERVAL_MS = 2000;
 const MAX_VISIBLE = 20;
 
 function StarRating({ rating }: { rating: number }) {

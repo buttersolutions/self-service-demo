@@ -81,56 +81,23 @@ export const ColorPicker = ({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const notifyChange = useCallback(
-    (h: number, s: number, l: number, a: number) => {
-      if (onChangeRef.current) {
-        const color = Color.hsl(h, s, l).alpha(a / 100);
-        const rgba = color.rgb().array();
-        onChangeRef.current([rgba[0], rgba[1], rgba[2], a / 100]);
-      }
-    },
-    []
-  );
+  const initialRef = useRef(true);
+  useEffect(() => {
+    if (initialRef.current) {
+      initialRef.current = false;
+      return;
+    }
+    if (onChangeRef.current) {
+      const color = Color.hsl(hue, saturation, lightness).alpha(alpha / 100);
+      const rgba = color.rgb().array();
+      onChangeRef.current([rgba[0], rgba[1], rgba[2], alpha / 100]);
+    }
+  }, [hue, saturation, lightness, alpha]);
 
-  const setHue = useCallback(
-    (h: number) => {
-      setHueRaw((prev) => {
-        if (prev !== h) notifyChange(h, saturation, lightness, alpha);
-        return h;
-      });
-    },
-    [saturation, lightness, alpha, notifyChange]
-  );
-
-  const setSaturation = useCallback(
-    (s: number) => {
-      setSaturationRaw((prev) => {
-        if (prev !== s) notifyChange(hue, s, lightness, alpha);
-        return s;
-      });
-    },
-    [hue, lightness, alpha, notifyChange]
-  );
-
-  const setLightness = useCallback(
-    (l: number) => {
-      setLightnessRaw((prev) => {
-        if (prev !== l) notifyChange(hue, saturation, l, alpha);
-        return l;
-      });
-    },
-    [hue, saturation, alpha, notifyChange]
-  );
-
-  const setAlpha = useCallback(
-    (a: number) => {
-      setAlphaRaw((prev) => {
-        if (prev !== a) notifyChange(hue, saturation, lightness, a);
-        return a;
-      });
-    },
-    [hue, saturation, lightness, notifyChange]
-  );
+  const setHue = useCallback((h: number) => setHueRaw(h), []);
+  const setSaturation = useCallback((s: number) => setSaturationRaw(s), []);
+  const setLightness = useCallback((l: number) => setLightnessRaw(l), []);
+  const setAlpha = useCallback((a: number) => setAlphaRaw(a), []);
 
   return (
     <ColorPickerContext.Provider

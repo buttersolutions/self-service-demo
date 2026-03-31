@@ -150,7 +150,7 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
   useEffect(() => {
     if (!cameraReady) return;
 
-    const staggerMs = Math.max(200, Math.min(500, 3000 / Math.max(displayLocations.length, 1)));
+    const staggerMs = Math.max(800, Math.min(1500, 10000 / Math.max(displayLocations.length, 1)));
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     displayLocations.forEach((_, i) => {

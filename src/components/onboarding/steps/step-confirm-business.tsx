@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
 import Color from 'color';
 import { OnboardingInput, OnboardingButton, PaginationDots } from '../ui';
 import { stepVariants, childVariants, popVariants } from '../constants';
@@ -21,6 +21,7 @@ import type { BusinessData } from '../types';
 export type { BusinessData } from '../types';
 
 const MAX_COLORS = 3;
+const BUTTON_LOADING_MS = 3000;
 
 interface StepConfirmBusinessProps {
   direction: number;
@@ -91,14 +92,15 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
   const [colors, setColors] = useState<string[]>(
     business.brandColors.length > 0 ? business.brandColors.slice(0, MAX_COLORS) : ['#625CE4'],
   );
+  const [buttonLoading, setButtonLoading] = useState(false);
 
   const valid = name.trim().length > 0 && website.trim().length > 0;
 
-  const handleConfirm = () => {
-    if (valid) {
-      onConfirm({ name: name.trim(), website: website.trim(), colors });
-    }
-  };
+  const handleConfirm = useCallback(() => {
+    if (!valid || buttonLoading) return;
+    setButtonLoading(true);
+    setTimeout(() => onConfirm({ name: name.trim(), website: website.trim(), colors }), BUTTON_LOADING_MS);
+  }, [valid, buttonLoading, name, website, colors, onConfirm]);
 
   const handleColorChange = (index: number, hex: string) => {
     setColors((prev) => prev.map((c, i) => (i === index ? hex : c)));
@@ -210,13 +212,20 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
       </div>
 
       <motion.div className="w-full mt-6" variants={childVariants}>
-        <OnboardingButton active={valid} disabled={!valid} onClick={handleConfirm}>
-          Confirm
+        <OnboardingButton active={valid} disabled={!valid || buttonLoading} onClick={handleConfirm}>
+          {buttonLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="size-4 animate-spin" />
+              Preparing...
+            </span>
+          ) : (
+            'Confirm'
+          )}
         </OnboardingButton>
       </motion.div>
 
       <motion.div variants={childVariants}>
-        <PaginationDots total={3} current={1} className="mt-auto pt-16" />
+        <PaginationDots total={3} current={2} className="mt-auto pt-16" />
       </motion.div>
     </motion.div>
   );

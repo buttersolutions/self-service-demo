@@ -69,6 +69,7 @@ function OnboardingInner() {
   const directionRef = useRef(1);
   const domainRef = useRef<string | undefined>(undefined);
   const autoSubmittedRef = useRef(false);
+  const brandPromiseRef = useRef<Promise<void> | null>(null);
 
   const goForward = (next: Step) => {
     directionRef.current = 1;
@@ -271,8 +272,8 @@ function OnboardingInner() {
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
 
     try {
-      // Fire brand fetch in background (don't block navigation)
-      const brandPromise = domain
+      // Fire brand fetch in background — stored in ref so locations step can await it
+      brandPromiseRef.current = domain
         ? fetch('/api/brand', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -343,18 +344,16 @@ function OnboardingInner() {
       dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
       domainRef.current = domain;
 
-      // Set initial business with place name (brand fetch will update when ready)
-      if (!brandPromise) {
-        dispatch({
-          type: 'SET_BUSINESS',
-          payload: {
-            name: place.displayName,
-            logoUrl: null,
-            domain: domain ?? '',
-            brandColors: ['#FFFFFF'],
-          },
-        });
-      }
+      // Set initial business immediately (brand fetch will overwrite with logo/colors)
+      dispatch({
+        type: 'SET_BUSINESS',
+        payload: {
+          name: place.displayName,
+          logoUrl: null,
+          domain: domain ?? '',
+          brandColors: ['#FFFFFF'],
+        },
+      });
 
       // Fire place details in background
       const detailPlaceIds = [
@@ -444,9 +443,13 @@ function OnboardingInner() {
     }
   }, [startReviewsFetch, startReviewAnalysisFetch]);
 
-  const handleLocationsConfirm = useCallback((confirmedLocs: LocationItem[]) => {
+  const handleLocationsConfirm = useCallback(async (confirmedLocs: LocationItem[]) => {
     dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
-    goForward('confirm-business'); // Locations → Business (brand data loading in background)
+    // Wait for brand data so "Is this you?" has logo/colors ready
+    if (brandPromiseRef.current) {
+      await brandPromiseRef.current;
+    }
+    goForward('confirm-business');
   }, [dispatch]);
 
   const handleGatheringComplete = useCallback(() => {
