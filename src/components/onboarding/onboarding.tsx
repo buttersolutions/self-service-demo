@@ -306,6 +306,10 @@ function OnboardingInner() {
         body: JSON.stringify({
           query: buildChainQuery(place),
           ...(domain && { websiteDomain: domain }),
+          locationBias: {
+            lat: place.location.lat,
+            lng: place.location.lng,
+          },
         }),
       }).then((res) => res.json() as Promise<TextSearchResponse>);
       dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } });
