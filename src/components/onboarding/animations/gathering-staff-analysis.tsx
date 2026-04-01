@@ -271,7 +271,7 @@ function AnalysisResults({
   useEffect(() => {
     if (step !== firstSectionStep) return;
     if (sectionCount === 0) return;
-    const t = setTimeout(() => setStep((s) => s + 1), 8000);
+    const t = setTimeout(() => setStep((s) => s + 1), 5000);
     return () => clearTimeout(t);
   }, [step, sectionCount]);
 
@@ -292,7 +292,7 @@ function AnalysisResults({
   // Auto-complete after summary has been visible
   useEffect(() => {
     if (step !== summaryStep) return;
-    const t = setTimeout(() => onComplete?.(), 8000);
+    const t = setTimeout(() => onComplete?.(), 12000);
     return () => clearTimeout(t);
   }, [step, summaryStep, onComplete]);
 

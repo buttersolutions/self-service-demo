@@ -88,7 +88,7 @@ export function GatheringReviews({ reviews, isActive }: GatheringReviewsProps) {
       <div
         ref={listRef}
         className="w-full max-w-lg h-full overflow-y-auto scroll-smooth px-4 pt-16 pb-20 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-        style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 85%, transparent 100%)' }}
+        style={{ transform: 'scale(1.2)', transformOrigin: 'top center', maskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 85%, transparent 100%)' }}
       >
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
