@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import { useOnboarding } from '@/lib/demo-flow-context';
+import type { LocationItem, GatheringData } from '@/components/onboarding/types';
 
 /* ── Config ─────────────────────────────────────────────────────────── */
 
@@ -79,6 +80,52 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+const STANDARD_FEEDS: { name: string; post: string }[] = [
+  { name: '💬 General', post: 'The go-to feed for company-wide updates and everyday communication.' },
+  { name: '📢 Announcements', post: 'Important announcements from leadership and management.' },
+  { name: '🏆 Team Shoutouts', post: 'Celebrate wins, recognize great work, and shout out your teammates!' },
+  { name: '👋 New Starters', post: 'Welcome new team members and help them feel at home from day one.' },
+  { name: '💡 Ideas & Feedback', post: 'Got an idea to improve how we work? Share it here.' },
+  { name: '🐦 Social', post: 'Off-topic chat, memes, and everything in between.' },
+  { name: '📅 Events', post: 'Upcoming events, team outings, and social gatherings.' },
+  { name: '🎲 Random', post: 'For anything and everything that doesn\'t fit elsewhere.' },
+];
+
+function buildFeeds(
+  locations: LocationItem[],
+  gatheringData: GatheringData,
+): VerifyOtpRequest['feeds'] {
+  const insights = gatheringData.reviewInsights ?? [];
+
+  const locationFeeds = locations.map((loc) => {
+    const locInsights = insights.filter((i) => i.locationName === loc.name);
+    const positive = locInsights.find((i) => i.sentiment === 'positive');
+
+    const post = positive
+      ? `Welcome to ${loc.name}! Here's what your guests are saying: "${positive.relevantExcerpt}" — keep it up!`
+      : `Welcome to ${loc.name}! This is your team's feed — share updates, celebrate wins, and stay connected.`;
+
+    return { name: `📍 ${loc.name}`, posts: [{ contentPlainText: post }] };
+  });
+
+  const standardFeeds = STANDARD_FEEDS.map((f) => ({
+    name: f.name,
+    posts: [{ contentPlainText: f.post }],
+  }));
+
+  const menuFeed = {
+    name: '📜 Menu Changes',
+    posts: [
+      {
+        contentPlainText:
+          'This feed is for sharing menu updates with your team — new dishes, seasonal changes, items removed, and pricing updates.',
+      },
+    ],
+  };
+
+  return [...standardFeeds, menuFeed, ...(locations.length > 1 ? locationFeeds : [])];
+}
+
 /* ── Hook ───────────────────────────────────────────────────────────── */
 
 export function useSelfServiceOnboarding() {
@@ -125,7 +172,7 @@ export function useSelfServiceOnboarding() {
           name: l.name,
           countryCode: toApiCountryCode(l.countryCode),
         })),
-        feeds: [],
+        feeds: buildFeeds(state.locations, state.gatheringData),
         theme: {
           colors: {
             primary: brandColorMap.primaryColor,
