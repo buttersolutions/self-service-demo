@@ -3,9 +3,13 @@
 import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
+import loadingAnimation from '../../../public/animations/all-gravy-loading.json';
+
+const Lottie = dynamic(() => import('lottie-react'), { ssr: false });
 import {
   StepSearch,
   StepConfirmBusiness,
@@ -70,6 +74,9 @@ function OnboardingInner() {
   const domainRef = useRef<string | undefined>(undefined);
   const autoSubmittedRef = useRef(false);
   const brandPromiseRef = useRef<Promise<void> | null>(null);
+
+  // When URL params are present, skip showing the search input entirely
+  const hasUrlParams = searchParams.has('place_id') && searchParams.has('name');
 
   const goForward = (next: Step) => {
     directionRef.current = 1;
@@ -329,9 +336,9 @@ function OnboardingInner() {
         };
       });
 
-      const filteredLocations = domain
-        ? chainLocations
-        : chainLocations.filter(loc => !place.countryCode || loc.countryCode === place.countryCode);
+      const filteredLocations = place.countryCode
+        ? chainLocations.filter(loc => loc.countryCode === place.countryCode)
+        : chainLocations;
 
       const selectedCountry = place.countryCode;
       filteredLocations.sort((a, b) => {
@@ -550,7 +557,7 @@ function OnboardingInner() {
       </AnimatePresence>
 
       <AnimatePresence mode="wait" custom={directionRef.current}>
-        {step === 'search' && (
+        {step === 'search' && !hasUrlParams && (
           <StepSearch
             key="step-search"
             direction={directionRef.current}
@@ -558,6 +565,23 @@ function OnboardingInner() {
             onSubmit={handleSearchSubmit}
             loading={loading}
           />
+        )}
+
+        {step === 'search' && hasUrlParams && (
+          <motion.div
+            key="step-search-auto"
+            className="flex flex-col items-center justify-center w-full max-w-[640px] mx-auto px-8 gap-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Lottie
+              animationData={loadingAnimation}
+              loop
+              autoplay
+              style={{ width: 80, height: 80 }}
+            />
+          </motion.div>
         )}
 
         {step === 'confirm-business' && business && (
