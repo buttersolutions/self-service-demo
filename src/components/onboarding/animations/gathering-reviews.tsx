@@ -14,6 +14,15 @@ const FIRST_REVEAL_DELAY_MS = 400;
 const REVEAL_INTERVAL_MS = 2500;
 const MAX_VISIBLE = 10;
 
+const AVATAR_COLORS = [
+  { bg: '#C4F0D5', text: '#1B7A3D' },
+  { bg: '#D8DAF9', text: '#3F3ABF' },
+  { bg: '#F2C4E0', text: '#9B2D6B' },
+  { bg: '#BEF5EF', text: '#1A7A6D' },
+  { bg: '#FDE6C4', text: '#8B5E1A' },
+  { bg: '#C4DEF0', text: '#1A5E8B' },
+];
+
 function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
@@ -116,7 +125,14 @@ export function GatheringReviews({ reviews, isActive }: GatheringReviewsProps) {
                     }}
                   >
                     <div className="flex items-center gap-2.5 mb-2">
-                      <div className="size-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-500 shrink-0">
+                      <div
+                        className="size-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                        style={{
+                          backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length].bg,
+                          color: AVATAR_COLORS[i % AVATAR_COLORS.length].text,
+                          border: '0.5px solid rgba(0,0,0,0.1)',
+                        }}
+                      >
                         {(review.author ?? '?').charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">

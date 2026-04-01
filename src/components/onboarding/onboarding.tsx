@@ -265,7 +265,6 @@ function OnboardingInner() {
       userRatingCount: place.userRatingCount,
       rating: place.rating,
     };
-    startReviewsFetch([place.placeId]);
     startReviewAnalysisFetch([primaryLoc]);
 
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
@@ -463,12 +462,11 @@ function OnboardingInner() {
   );
 
   const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
-    // Scrape all confirmed chain locations (full mode, no lite)
+    // Full analysis — SSE endpoint handles review scraping internally
     if (confirmedLocs.length > 0) {
-      startReviewsFetch(confirmedLocs.map((l) => l.id));
       startReviewAnalysisFetch(confirmedLocs, false);
     }
-  }, [startReviewsFetch, startReviewAnalysisFetch]);
+  }, [startReviewAnalysisFetch]);
 
   const handleLocationsConfirm = useCallback(async (confirmedLocs: LocationItem[]) => {
     dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
