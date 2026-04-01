@@ -78,7 +78,7 @@ export async function searchPlaces(
 ): Promise<PlaceSummary[]> {
   const body: Record<string, unknown> = { textQuery: query, maxResultCount: 20 };
 
-  if (locationBias && !websiteDomain) {
+  if (locationBias) {
     body.locationBias = {
       circle: {
         center: { latitude: locationBias.lat, longitude: locationBias.lng },
@@ -103,22 +103,10 @@ export async function searchPlaces(
   const brandName = websiteDomain.split(".")[0];
   const queries = [query, brandName !== query.toLowerCase() ? brandName : null].filter(Boolean) as string[];
 
-  const regions: Record<string, unknown>[] = [
+  const regions = [
     {}, // global
     { locationRestriction: { rectangle: { low: { latitude: 35, longitude: -11 }, high: { latitude: 71, longitude: 40 } } } }, // Europe
   ];
-
-  // Add a location-biased search around the selected place (can't combine with locationRestriction)
-  if (locationBias) {
-    regions.push({
-      locationBias: {
-        circle: {
-          center: { latitude: locationBias.lat, longitude: locationBias.lng },
-          radius: locationBias.radiusMeters ?? 500000,
-        },
-      },
-    });
-  }
 
   const searches = queries.flatMap((q) =>
     regions.map((region) =>
