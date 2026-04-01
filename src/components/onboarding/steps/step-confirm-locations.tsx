@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
+import { useOnboarding } from '@/lib/demo-flow-context';
 import type { LocationItem } from '../types';
 
 interface StepConfirmLocationsProps {
@@ -167,6 +168,7 @@ export function StepConfirmLocations({
   onEarlyStart,
   onConfirm,
 }: StepConfirmLocationsProps) {
+  const { state: { skippedSearch } } = useOnboarding();
   const [locations, setLocations] = useState<LocationItem[]>(initialLocations);
   const [showAddInput, setShowAddInput] = useState(false);
   const [buttonLoading, setButtonLoading] = useState(false);
@@ -273,7 +275,7 @@ Are these all your locations?        </h1>
       </motion.div>
 
       <motion.div variants={childVariants}>
-        <PaginationDots total={3} current={1} className="mt-auto pt-16" />
+        <PaginationDots total={skippedSearch ? 2 : 3} current={skippedSearch ? 0 : 1} className="mt-auto pt-16" />
       </motion.div>
     </motion.div>
   );

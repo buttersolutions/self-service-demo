@@ -26,6 +26,7 @@ import { deriveBrandColorMap, type BrandColorMap } from "./colors";
 export interface OnboardingState {
   step: Step;
   loading: boolean;
+  skippedSearch: boolean;
   selectedPlace: PlaceSummary | null;
   business: BusinessData | null;
   locations: LocationItem[];
@@ -48,6 +49,7 @@ const initialGatheringData: GatheringData = {
 const initialState: OnboardingState = {
   step: "search",
   loading: false,
+  skippedSearch: false,
   selectedPlace: null,
   business: null,
   locations: [],
@@ -75,6 +77,7 @@ export type OnboardingAction =
   | { type: "TRACK_FETCH_END"; payload: { key: string; status: "done" | "error"; errorMessage?: string } }
   | { type: "TRACK_SSE_EVENT"; payload: { key: string; event: string } }
   | { type: "SET_REVIEW_ANALYSIS_FALLBACK"; payload: ReviewAnalysis }
+  | { type: "SET_SKIPPED_SEARCH"; payload: boolean }
   | { type: "RESET" };
 
 /* ── Reducer ────────────────────────────────────────────────────────── */
@@ -188,6 +191,8 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
         },
       };
     }
+    case "SET_SKIPPED_SEARCH":
+      return { ...state, skippedSearch: action.payload };
     case "SET_REVIEW_ANALYSIS_FALLBACK":
       if (state.gatheringData.reviewAnalysis !== null) return state;
       return {

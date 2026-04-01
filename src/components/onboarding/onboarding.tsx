@@ -410,6 +410,7 @@ function OnboardingInner() {
     if (!placeId || !name) return;
 
     autoSubmittedRef.current = true;
+    dispatch({ type: 'SET_SKIPPED_SEARCH', payload: true });
     dispatch({ type: 'SET_LOADING', payload: true });
 
     // Enrich from Google Places so we get websiteUri, countryCode, proper lat/lng

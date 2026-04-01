@@ -86,7 +86,7 @@ function ColorSwatch({
 }
 
 export function StepConfirmBusiness({ direction, business, onConfirm }: StepConfirmBusinessProps) {
-  const { brandColorMap } = useOnboarding();
+  const { brandColorMap, state: { skippedSearch } } = useOnboarding();
   const [name, setName] = useState(business.name);
   const [website, setWebsite] = useState(business.domain);
   const [colors, setColors] = useState<string[]>(
@@ -225,7 +225,7 @@ export function StepConfirmBusiness({ direction, business, onConfirm }: StepConf
       </motion.div>
 
       <motion.div variants={childVariants}>
-        <PaginationDots total={3} current={2} className="mt-auto pt-16" />
+        <PaginationDots total={skippedSearch ? 2 : 3} current={skippedSearch ? 1 : 2} className="mt-auto pt-16" />
       </motion.div>
     </motion.div>
   );
