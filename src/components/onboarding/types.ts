@@ -1,7 +1,18 @@
 import type { WaterfallCompany, WaterfallPerson } from '@/lib/waterfall';
-import type { PlacePhoto, ReviewInsight, ReviewAnalysis } from '@/lib/types';
+import type { PlacePhoto, ReviewInsight, ReviewAnalysis, GuestFeedbackReport } from '@/lib/types';
 
-export type Step = 'search' | 'confirm-business' | 'confirm-locations' | 'gathering' | 'done';
+export type Step =
+  // Shared
+  | 'search'
+  | 'mockup'
+  | 'done'
+  // Flow 1 (standard branding-led)
+  | 'map-scanning'
+  | 'website-scanning'
+  | 'confirm'
+  // Flow 2 (feedback-led)
+  | 'feedback-analysis'
+  | 'feedback-confirm';
 
 export interface BusinessData {
   name: string;
@@ -10,7 +21,10 @@ export interface BusinessData {
   brandColors: string[];
   fonts?: string[];
   ogImage?: string | null;
+  screenshot?: string | null;
+  favicon?: string | null;
   websiteImages?: string[];
+  instagramUsername?: string | null;
 }
 
 export interface FetchTiming {
@@ -64,4 +78,6 @@ export interface GatheringData {
   reviewAnalysisPreview: ReviewAnalysis | null;
   reviewProgress: ReviewProgressEvent[];
   feedPosts: FeedPost[] | null;
+  guestFeedbackReport: GuestFeedbackReport | null;
+  guestFeedbackReportPreview: GuestFeedbackReport | null;
 }

@@ -22,6 +22,16 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
   const displayLocations = useMemo(() => locations.slice(0, 20), [locations]);
   const [visiblePins, setVisiblePins] = useState<Set<number>>(new Set());
   const [cameraReady, setCameraReady] = useState(false);
+  const prevLocationCountRef = useRef(displayLocations.length);
+
+  // Reset camera when new locations arrive (e.g., chain discovery resolves)
+  useEffect(() => {
+    if (displayLocations.length > prevLocationCountRef.current) {
+      setCameraReady(false);
+      setVisiblePins(new Set());
+    }
+    prevLocationCountRef.current = displayLocations.length;
+  }, [displayLocations.length]);
 
   const initialCenter = useMemo<[number, number]>(() => {
     if (displayLocations.length === 0) return [0, 20];

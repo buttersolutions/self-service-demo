@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search } from 'lucide-react';
-import { OnboardingInput, OnboardingButton, PaginationDots } from '../ui';
+import { OnboardingInput, OnboardingButton, ProgressBar } from '../ui';
+import type { ProgressBarVariant } from '../ui/progress-bar';
 import { stepVariants, childVariants } from '../constants';
 import type { PlaceSummary } from '@/lib/types';
 
@@ -12,9 +13,10 @@ interface StepSearchProps {
   initialPlace?: PlaceSummary | null;
   onSubmit: (place: PlaceSummary) => void;
   loading: boolean;
+  progressVariant?: ProgressBarVariant;
 }
 
-export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepSearchProps) {
+export function StepSearch({ direction, initialPlace, onSubmit, loading, progressVariant }: StepSearchProps) {
   const [selectedPlace, setSelectedPlace] = useState<PlaceSummary | null>(initialPlace ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -95,6 +97,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
   };
 
   return (
+    <>
     <motion.div
       className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8"
       custom={direction}
@@ -137,12 +140,10 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
         </OnboardingButton>
       </motion.div>
 
-      <motion.div
-        className="mt-auto pt-16 flex flex-col items-center gap-6"
-        variants={childVariants}
-      >
-        <PaginationDots total={3} current={0} />
-      </motion.div>
     </motion.div>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-8 max-w-xl">
+      <ProgressBar current={0} variant={progressVariant} />
+    </div>
+    </>
   );
 }

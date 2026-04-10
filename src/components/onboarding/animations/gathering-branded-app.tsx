@@ -18,6 +18,7 @@ import type { PlacePhoto } from '@/lib/types';
 interface GatheringBrandedAppProps {
   businessName: string;
   logoUrl: string | null;
+  favicon: string | null;
   locations: LocationItem[];
   photos: PlacePhoto[];
   isActive: boolean;
@@ -715,6 +716,7 @@ const CHECKLIST_ITEMS = [
 export function GatheringBrandedApp({
   businessName,
   logoUrl,
+  favicon,
   locations,
   photos,
   isActive,
@@ -889,8 +891,8 @@ export function GatheringBrandedApp({
                         boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
                       }}
                     >
-                      {logoUrl ? (
-                        <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+                      {(logoUrl ?? favicon) ? (
+                        <img src={(logoUrl ?? favicon)!} alt="" className="w-full h-full object-contain p-1" />
                       ) : (
                         <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
                       )}

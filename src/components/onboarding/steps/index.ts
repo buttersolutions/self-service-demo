@@ -1,6 +1,8 @@
 export { StepSearch } from './step-search';
-export { StepConfirmBusiness } from './step-confirm-business';
-export type { BusinessData } from '../types';
-export { StepConfirmLocations } from './step-confirm-locations';
-export { StepGathering } from './step-gathering';
+export { StepMapScanning } from './step-map-scanning';
+export { StepWebsiteScanning } from './step-website-scanning';
+export { StepConfirm } from './step-confirm';
 export { StepDone } from './step-done';
+export { StepMockup } from './step-mockup';
+export { StepFeedbackAnalysis } from './step-feedback-analysis';
+export { StepFeedbackConfirm } from './step-feedback-confirm';

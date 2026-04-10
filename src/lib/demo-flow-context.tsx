@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type Dispatch,
 } from "react";
-import type { PlaceSummary, ReviewInsight, ReviewAnalysis } from "./types";
+import type { PlaceSummary, ReviewInsight, ReviewAnalysis, GuestFeedbackReport } from "./types";
 import type {
   BusinessData,
   FeedPost,
@@ -23,6 +23,14 @@ import { deriveBrandColorMap, type BrandColorMap } from "./colors";
 
 /* ── State ──────────────────────────────────────────────────────────── */
 
+export type PipelineStageStatus = 'pending' | 'active' | 'done';
+
+export interface PipelineStage {
+  id: string;
+  label: string;
+  status: PipelineStageStatus;
+}
+
 export interface OnboardingState {
   step: Step;
   loading: boolean;
@@ -31,6 +39,8 @@ export interface OnboardingState {
   locations: LocationItem[];
   gatheringData: GatheringData;
   fetchTimings: Record<string, FetchTiming>;
+  chainDiscoveryDone: boolean;
+  pipelineStages: PipelineStage[];
 }
 
 const initialGatheringData: GatheringData = {
@@ -43,6 +53,8 @@ const initialGatheringData: GatheringData = {
   reviewAnalysisPreview: null,
   reviewProgress: [],
   feedPosts: null,
+  guestFeedbackReport: null,
+  guestFeedbackReportPreview: null,
 };
 
 const initialState: OnboardingState = {
@@ -53,6 +65,8 @@ const initialState: OnboardingState = {
   locations: [],
   gatheringData: initialGatheringData,
   fetchTimings: {},
+  chainDiscoveryDone: false,
+  pipelineStages: [],
 };
 
 /* ── Actions ────────────────────────────────────────────────────────── */
@@ -75,6 +89,11 @@ export type OnboardingAction =
   | { type: "TRACK_FETCH_END"; payload: { key: string; status: "done" | "error"; errorMessage?: string } }
   | { type: "TRACK_SSE_EVENT"; payload: { key: string; event: string } }
   | { type: "SET_REVIEW_ANALYSIS_FALLBACK"; payload: ReviewAnalysis }
+  | { type: "SET_GUEST_FEEDBACK_REPORT"; payload: GuestFeedbackReport }
+  | { type: "SET_GUEST_FEEDBACK_REPORT_PREVIEW"; payload: GuestFeedbackReport }
+  | { type: "SET_CHAIN_DISCOVERY_DONE" }
+  | { type: "INIT_PIPELINE_STAGES"; payload: PipelineStage[] }
+  | { type: "UPDATE_PIPELINE_STAGE"; payload: { id: string; status: PipelineStageStatus; label?: string } }
   | { type: "RESET" };
 
 /* ── Reducer ────────────────────────────────────────────────────────── */
@@ -196,6 +215,29 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
           ...state.gatheringData,
           reviewAnalysis: { ...action.payload, insights: state.gatheringData.reviewInsights },
         },
+      };
+    case "SET_GUEST_FEEDBACK_REPORT":
+      return {
+        ...state,
+        gatheringData: { ...state.gatheringData, guestFeedbackReport: action.payload },
+      };
+    case "SET_GUEST_FEEDBACK_REPORT_PREVIEW":
+      return {
+        ...state,
+        gatheringData: { ...state.gatheringData, guestFeedbackReportPreview: action.payload },
+      };
+    case "SET_CHAIN_DISCOVERY_DONE":
+      return { ...state, chainDiscoveryDone: true };
+    case "INIT_PIPELINE_STAGES":
+      return { ...state, pipelineStages: action.payload };
+    case "UPDATE_PIPELINE_STAGE":
+      return {
+        ...state,
+        pipelineStages: state.pipelineStages.map((s) =>
+          s.id === action.payload.id
+            ? { ...s, status: action.payload.status, label: action.payload.label ?? s.label }
+            : s
+        ),
       };
     case "RESET":
       return initialState;
