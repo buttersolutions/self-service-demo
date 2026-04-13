@@ -707,7 +707,7 @@ Given quantitative data and the finding category labels picked by the analyst, w
 
 1. "executive_summary": 80-100 words. What's working, what isn't, what to focus on. Plain language.
 2. "trend_analysis": 2-3 sentences on how things are trending. Reference the rating trend.
-3. "methodology": 1 sentence. "Based on {n} Google reviews, categorised by theme and sentiment."
+3. "methodology": 3-4 sentences describing the analysis process. Cover: how many reviews were collected, from which sources and sort orders (newest + lowest-rated), the two-stage classification process (AI categorisation into 13 themed categories across 4 operational pillars, then pattern detection), how findings were selected (frequency, severity, recurrence), and that quotes are verbatim from public Google reviews. End with the analysis date.
 
 Return JSON only:
 {

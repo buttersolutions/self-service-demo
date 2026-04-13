@@ -41,6 +41,7 @@ export interface OnboardingState {
   fetchTimings: Record<string, FetchTiming>;
   chainDiscoveryDone: boolean;
   pipelineStages: PipelineStage[];
+  reportId: string | null;
 }
 
 const initialGatheringData: GatheringData = {
@@ -67,6 +68,7 @@ const initialState: OnboardingState = {
   fetchTimings: {},
   chainDiscoveryDone: false,
   pipelineStages: [],
+  reportId: null,
 };
 
 /* ── Actions ────────────────────────────────────────────────────────── */
@@ -94,6 +96,7 @@ export type OnboardingAction =
   | { type: "SET_CHAIN_DISCOVERY_DONE" }
   | { type: "INIT_PIPELINE_STAGES"; payload: PipelineStage[] }
   | { type: "UPDATE_PIPELINE_STAGE"; payload: { id: string; status: PipelineStageStatus; label?: string } }
+  | { type: "SET_REPORT_ID"; payload: string }
   | { type: "RESET" };
 
 /* ── Reducer ────────────────────────────────────────────────────────── */
@@ -239,6 +242,8 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
             : s
         ),
       };
+    case "SET_REPORT_ID":
+      return { ...state, reportId: action.payload };
     case "RESET":
       return initialState;
     default:

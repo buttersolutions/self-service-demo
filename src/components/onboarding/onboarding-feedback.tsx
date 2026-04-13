@@ -78,6 +78,8 @@ function OnboardingFeedbackInner() {
   const directionRef = useRef(1);
   const domainRef = useRef<string | undefined>(undefined);
   const autoSubmittedRef = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const goForward = (next: Step) => {
     directionRef.current = 1;
@@ -211,6 +213,20 @@ function OnboardingFeedbackInner() {
                 if (data.executive_summary !== undefined) {
                   dispatch({ type: 'SET_GUEST_FEEDBACK_REPORT', payload: data });
                   dispatch({ type: 'UPDATE_PIPELINE_STAGE', payload: { id: 'finalize', status: 'done' } });
+
+                  // Persist to Supabase (fire-and-forget)
+                  fetch('/api/reports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      report: data,
+                      business: stateRef.current.business,
+                      locations: stateRef.current.locations,
+                    }),
+                  })
+                    .then((r) => r.json())
+                    .then(({ id }) => { if (id) dispatch({ type: 'SET_REPORT_ID', payload: id }); })
+                    .catch(() => {});
                 }
               } else if (eventName === 'log') {
                 const msg = data.message ?? '';

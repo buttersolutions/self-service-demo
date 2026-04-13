@@ -1,8 +1,12 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, TrendingUp, TrendingDown, Minus, Quote, ChevronRight } from 'lucide-react';
+import { Star, TrendingUp, TrendingDown, Minus, Quote, ChevronRight, Download, Loader2, Link2, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import type { GuestFeedbackReport, ReportFinding, ReportStrength, ReportQuote, PillarId } from '@/lib/types';
+import { exportReportPdf } from '@/lib/export-report-pdf';
+import { useOnboarding } from '@/lib/demo-flow-context';
 
 const fadeIn = {
   initial: { opacity: 0, y: 12 },
@@ -25,16 +29,61 @@ interface GatheringFeedbackReportProps {
 }
 
 export function GatheringFeedbackReport({ report, isActive = true }: GatheringFeedbackReportProps) {
+  const { state } = useOnboarding();
+  const reportContentRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
   if (!isActive) return null;
 
   const { metadata, executive_summary, quantitative_overview, strengths, findings, trend_analysis, recommendations, methodology, citations } = report;
 
+  const handleDownloadPdf = async () => {
+    if (!reportContentRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const slug = metadata.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      await exportReportPdf(reportContentRef.current, `guest-feedback-${slug}.pdf`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!state.reportId) return;
+    const url = `${window.location.origin}/report/${state.reportId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      toast.success('Link copied to clipboard');
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="h-full overflow-y-auto px-6 py-8 [&::-webkit-scrollbar]:hidden">
-      <div className="max-w-3xl mx-auto space-y-10">
+      <div ref={reportContentRef} className="max-w-3xl mx-auto space-y-10">
 
         {/* Report header */}
-        <motion.div {...fadeIn} className="text-center space-y-2">
+        <motion.div {...fadeIn} className="text-center space-y-2 relative">
+          <div className="absolute top-0 right-0 flex items-center gap-1">
+            {state.reportId && (
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                {linkCopied ? <Check className="size-3.5 text-emerald-500" /> : <Link2 className="size-3.5" />}
+                {linkCopied ? 'Copied!' : 'Share'}
+              </button>
+            )}
+            <button
+              onClick={handleDownloadPdf}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+              {exporting ? 'Exporting…' : 'PDF'}
+            </button>
+          </div>
           <p className="text-[11px] uppercase tracking-widest text-gray-400 font-medium">Guest Feedback Intelligence Report</p>
           <h1 className="text-2xl font-bold text-gray-900 font-serif">{metadata.business_name}</h1>
           <p className="text-sm text-gray-500">
@@ -200,13 +249,6 @@ export function GatheringFeedbackReport({ report, isActive = true }: GatheringFe
                     <div>
                       <h4 className="text-sm font-semibold text-gray-900">{rec.title}</h4>
                       <p className="text-sm text-gray-600 mt-1 leading-relaxed">{rec.description}</p>
-                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                        {rec.pillar_ids.map((pid) => (
-                          <span key={pid} className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: PILLAR_COLORS[pid] + '15', color: PILLAR_COLORS[pid] }}>
-                            {pid}
-                          </span>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>

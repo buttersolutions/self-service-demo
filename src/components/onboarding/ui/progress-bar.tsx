@@ -12,9 +12,9 @@ const STEPS_BY_VARIANT = {
   ],
   feedback: [
     'Find your business',
-    'Reviews Analysis',
-    'App Branding',
-    'Get your app',
+    'Your guest report',
+    'Your solution',
+    'Get the app',
   ],
 } as const;
 

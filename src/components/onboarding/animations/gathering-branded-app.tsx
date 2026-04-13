@@ -861,7 +861,7 @@ export function GatheringBrandedApp({
                 animate={isActive ? { opacity: 1, y: 0 } : {}}
                 transition={{ delay: 0.2, duration: 0.5 }}
               >
-                Your branded app is ready
+                Here's how your team stays ahead of what guests are saying
               </motion.h3>
               <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
                 <div
