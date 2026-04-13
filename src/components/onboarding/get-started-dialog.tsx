@@ -398,13 +398,13 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
                 </p>
               </div>
 
-              <div className="rounded-xl border border-gray-200 overflow-hidden mb-4 bg-white">
+              <div className="overflow-hidden mb-4">
                 <Cal
                   calLink={CALCOM_BOOKING_LINK}
                   calOrigin={CALCOM_ORIGIN}
                   embedJsUrl={CALCOM_EMBED_JS_URL}
-                  style={{ width: '100%', height: '520px', overflow: 'scroll' }}
-                  config={{ layout: 'month_view', theme: 'light' }}
+                  style={{ width: '100%', height: '420px', overflow: 'scroll' }}
+                  config={{ layout: 'month_view', theme: 'light', hideEventTypeDetails: '1' }}
                 />
               </div>
 

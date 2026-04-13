@@ -797,16 +797,16 @@ export function GatheringBrandedApp({
         animate={expanded ? { opacity: 0, pointerEvents: 'none' as const } : { opacity: 1, pointerEvents: 'auto' as const }}
         transition={{ duration: 0.1 }}
       >
-        <div className="w-full h-full p-4 bg-[#625CE4]">
+        <div className="w-full h-full p-2 sm:p-4 bg-[#625CE4]">
           <motion.div
-            className="w-full h-full flex rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
+            className="w-full h-full flex flex-col md:flex-row rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
             initial={{ opacity: 0 }}
             animate={isActive ? { opacity: 1 } : {}}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
-            {/* Left sidebar */}
+            {/* Left sidebar — hidden on mobile */}
             <motion.div
-              className="w-80 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
+              className="hidden md:flex w-80 shrink-0 flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
               initial={{ opacity: 0, x: -40 }}
               animate={isActive ? { opacity: 1, x: 0 } : {}}
               transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -854,16 +854,39 @@ export function GatheringBrandedApp({
             </motion.div>
 
             {/* Right side — mockups with overlay button */}
-            <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-6 pt-12">
+            <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-4 sm:px-6 pt-6 sm:pt-12">
               <motion.h3
-                className="text-3xl font-semibold text-gray-900 font-serif mb-12 shrink-0"
+                className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 font-serif mb-6 sm:mb-12 shrink-0 text-center px-2"
                 initial={{ opacity: 0, y: 16 }}
                 animate={isActive ? { opacity: 1, y: 0 } : {}}
                 transition={{ delay: 0.2, duration: 0.5 }}
               >
                 Here's how your team stays ahead of what guests are saying
               </motion.h3>
-              <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
+
+              {/* Mobile checklist — visible only on mobile */}
+              <div className="md:hidden w-full max-w-xs mb-6 space-y-2">
+                {CHECKLIST_ITEMS.map((item, i) => (
+                  <motion.div
+                    key={i}
+                    className="flex items-start gap-2.5"
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={isActive ? { opacity: 1, x: 0 } : {}}
+                    transition={{ delay: 0.5 + i * 0.1, duration: 0.35 }}
+                  >
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={isActive ? { scale: 1 } : {}}
+                      transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 0.5 + i * 0.1 }}
+                      className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                    >
+                      <Check className="size-2.5 text-white" strokeWidth={3} />
+                    </motion.div>
+                    <span className="text-xs font-medium text-gray-900">{item}</span>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="hidden md:block" style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
                 <div
                   className="relative"
                   style={{
@@ -936,9 +959,33 @@ export function GatheringBrandedApp({
                 </div>
               </div>
 
-              {/* Gradient overlay with header + button */}
+              {/* Mobile-only phone mockup — top at ~35% of screen, overflows off bottom */}
               <motion.div
-                className="absolute bottom-0 left-0 right-0 z-20 flex items-end justify-center pb-8"
+                className="md:hidden absolute left-1/2 -translate-x-1/2"
+                style={{ top: '35%' }}
+                initial={{ opacity: 0, y: 60 }}
+                animate={isActive ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.5, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div style={{ transform: 'scale(0.7)', transformOrigin: 'top center' }}>
+                  <PhoneMockup>
+                    <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
+                      <MobileFeedReplica
+                        businessName={businessName}
+                        logoUrl={logoUrl}
+                        primaryColor={primaryColor}
+                        headerColor={darkestBrandColor}
+                        photos={photos}
+                        animate={isActive}
+                      />
+                    </div>
+                  </PhoneMockup>
+                </div>
+              </motion.div>
+
+              {/* Desktop gradient overlay with button */}
+              <motion.div
+                className="hidden md:flex absolute bottom-0 left-0 right-0 z-20 items-end justify-center pb-8"
                 style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)', height: 200 }}
                 initial={{ opacity: 0 }}
                 animate={isActive ? { opacity: 1 } : {}}
@@ -951,19 +998,36 @@ export function GatheringBrandedApp({
                   Get started
                 </button>
               </motion.div>
+
+              {/* Mobile floating button — on top of the phone mockup */}
+              <motion.div
+                className="md:hidden absolute bottom-8 left-0 right-0 z-20 flex justify-center"
+                initial={{ opacity: 0, y: 20 }}
+                animate={isActive ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 1.0, duration: 0.5 }}
+              >
+                <button
+                  onClick={handleGetStarted}
+                  className="h-12 px-10 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_4px_16px_rgba(98,92,228,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
+                >
+                  Get started
+                </button>
+              </motion.div>
             </div>
           </motion.div>
         </div>
       </motion.div>
 
-      {/* ── Expanded view: fullscreen FeedReplica + dialog ── */}
+      {/* ── Expanded view: fullscreen FeedReplica (desktop) or phone mockup (mobile) + dialog ── */}
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: 0 }}
         animate={expanded ? { opacity: 1 } : { opacity: 0, pointerEvents: 'none' as const }}
         transition={{ duration: 0.1 }}
       >
+        {/* Desktop: fullscreen feed */}
         <div
+          className="hidden md:block"
           style={{
             width: FEED_W,
             height: FEED_H,
@@ -978,6 +1042,24 @@ export function GatheringBrandedApp({
             photos={photos}
             animate={expanded}
           />
+        </div>
+
+        {/* Mobile: phone mockup as background behind dialog */}
+        <div className="md:hidden w-full h-full flex justify-center bg-[#625CE4] pt-8">
+          <div style={{ transform: 'scale(0.55)', transformOrigin: 'top center' }}>
+            <PhoneMockup>
+              <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
+                <MobileFeedReplica
+                  businessName={businessName}
+                  logoUrl={logoUrl}
+                  primaryColor={primaryColor}
+                  headerColor={darkestBrandColor}
+                  photos={photos}
+                  animate={expanded}
+                />
+              </div>
+            </PhoneMockup>
+          </div>
         </div>
       </motion.div>
 

@@ -28,12 +28,17 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading, progres
     const place = ac.getPlace();
     if (!place.place_id || !place.geometry?.location) return;
 
+    const countryComponent = place.address_components?.find((c) =>
+      c.types.includes('country'),
+    );
+
     const summary: PlaceSummary = {
       placeId: place.place_id,
       displayName: place.name ?? '',
       formattedAddress: place.formatted_address ?? '',
       websiteUri: place.website,
       types: place.types,
+      countryCode: countryComponent?.short_name?.toLowerCase(),
       location: {
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
@@ -58,6 +63,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading, progres
           'website',
           'geometry.location',
           'types',
+          'address_components',
         ],
       });
 

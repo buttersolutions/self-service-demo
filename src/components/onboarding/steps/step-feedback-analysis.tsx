@@ -76,10 +76,10 @@ export function StepFeedbackAnalysis({ onReady }: StepFeedbackAnalysisProps) {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-8 max-w-xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-4 sm:px-8 max-w-xl">
           <ProgressBar current={1} variant="feedback" />
         </div>
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 w-full max-w-md">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8 w-full max-w-md mx-4 sm:mx-0">
           <h3 className="text-base font-semibold text-gray-900 mb-1">Generating your report</h3>
           <p className="text-xs text-gray-400 mb-6">Reading guest reviews and surfacing patterns</p>
           <div className="space-y-3">
@@ -127,7 +127,7 @@ export function StepFeedbackAnalysis({ onReady }: StepFeedbackAnalysisProps) {
       <div className="w-full h-full overflow-y-auto [&::-webkit-scrollbar]:hidden pb-24">
         <GatheringFeedbackReport report={report} isActive />
       </div>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-8 max-w-xl">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-4 sm:px-8 max-w-xl">
         <ProgressBar current={1} variant="feedback" />
       </div>
     </motion.div>

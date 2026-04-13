@@ -31,7 +31,7 @@ export function ProgressBar({ current, variant = 'default', className }: Progres
   return (
     <div
       className={cn(
-        'bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200/60 px-8 py-4 w-full mx-auto',
+        'bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200/60 px-3 sm:px-8 py-4 w-full mx-auto',
         className,
       )}
     >
@@ -94,7 +94,7 @@ export function ProgressBar({ current, variant = 'default', className }: Progres
                 {/* Label */}
                 <span
                   className={cn(
-                    'text-[10px] leading-tight text-center whitespace-nowrap transition-colors duration-300',
+                    'text-[9px] sm:text-[10px] leading-tight text-center transition-colors duration-300',
                     completed
                       ? 'text-[#625CE4] font-medium'
                       : active

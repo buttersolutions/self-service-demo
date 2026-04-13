@@ -44,20 +44,20 @@ export function StepFeedbackConfirm({ onConfirm }: StepFeedbackConfirmProps) {
   };
 
   return (
-    <div className="relative w-full h-dvh flex bg-gray-50/40 overflow-hidden">
-      {/* Left: report (60%) */}
+    <div className="relative w-full h-dvh bg-gray-50/40 overflow-hidden">
+      {/* Report — stays full-width and centered, hidden on mobile */}
       <motion.div
         ref={reportRef}
-        className="flex-1 h-full overflow-y-auto [&::-webkit-scrollbar]:hidden border-r border-gray-200"
+        className="hidden md:block absolute inset-0 overflow-y-auto [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 1 }}
         animate={{ opacity: 1 }}
       >
         {report && <GatheringFeedbackReport report={report} isActive />}
       </motion.div>
 
-      {/* Right: branding confirm panel (40%, slides in from right) */}
+      {/* Right: branding confirm panel — overlays from right on desktop, full width on mobile */}
       <motion.div
-        className="w-[440px] shrink-0 h-full bg-white border-l border-gray-200 shadow-2xl overflow-y-auto [&::-webkit-scrollbar]:hidden"
+        className="relative md:absolute md:right-0 md:top-0 w-full md:w-[440px] h-full bg-white md:border-l border-gray-200 md:shadow-2xl overflow-y-auto [&::-webkit-scrollbar]:hidden z-10"
         initial={{ x: 440, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
@@ -111,7 +111,7 @@ export function StepFeedbackConfirm({ onConfirm }: StepFeedbackConfirmProps) {
         </div>
       </motion.div>
 
-      <div className="fixed bottom-6 left-8 z-30 w-full max-w-xl px-8" style={{ width: 'calc(100% - 440px)' }}>
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-xl px-4 sm:px-8">
         <ProgressBar current={2} variant="feedback" />
       </div>
     </div>
