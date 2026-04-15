@@ -19,6 +19,7 @@ import type { FetchTiming, LocationItem, ReviewItem, Step } from './types';
 import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, ReviewInsight, ReviewAnalysis } from '@/lib/types';
 import { OnboardingProvider, useOnboarding } from '@/lib/demo-flow-context';
 import { extractDomain, classifyWebsiteUri } from '@/lib/domain-utils';
+import { track } from '@/lib/tracking/track';
 
 const IGNORED_TYPES = new Set([
   'establishment',
@@ -257,6 +258,11 @@ function OnboardingInner() {
   const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
     dispatch({ type: 'SET_SELECTED_PLACE', payload: place });
     dispatch({ type: 'SET_LOADING', payload: true });
+
+    track({
+      name: 'search_submitted',
+      props: { place_id: place.placeId, has_website: !!place.websiteUri },
+    });
 
     const uriResult = classifyWebsiteUri(place.websiteUri);
     const domain = uriResult.type === 'domain' ? uriResult.domain : undefined;
