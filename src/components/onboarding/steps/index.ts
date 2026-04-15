@@ -1,6 +1,7 @@
 export { StepSearch } from './step-search';
 export { StepMapScanning } from './step-map-scanning';
 export { StepWebsiteScanning } from './step-website-scanning';
+export { StepWebsitePrompt } from './step-website-prompt';
 export { StepConfirm } from './step-confirm';
 export { StepDone } from './step-done';
 export { StepMockup } from './step-mockup';

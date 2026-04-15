@@ -8,6 +8,7 @@ export type Step =
   | 'done'
   // Flow 1 (standard branding-led)
   | 'map-scanning'
+  | 'website-prompt'
   | 'website-scanning'
   | 'confirm'
   // Flow 2 (feedback-led)

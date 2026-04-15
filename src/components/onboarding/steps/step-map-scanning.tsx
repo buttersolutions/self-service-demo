@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { GatheringMap } from '../animations/gathering-map';
 import { TypewriterSearch } from '../ui/typewriter-search';
 import { ProgressBar } from '../ui/progress-bar';
 import { useOnboarding } from '@/lib/demo-flow-context';
 
-const MIN_DURATION_MS = 6000;
+const MIN_DURATION_MS = 2000;
+const MAX_DURATION_MS = 20000;
 
 interface StepMapScanningProps {
   onComplete: () => void;
@@ -15,25 +16,39 @@ interface StepMapScanningProps {
 
 export function StepMapScanning({ onComplete }: StepMapScanningProps) {
   const { state } = useOnboarding();
-  const { locations, business, chainDiscoveryDone } = state;
+  const { locations, business, chainDiscoveryDone, fetchTimings } = state;
   const [minElapsed, setMinElapsed] = useState(false);
+  const [maxElapsed, setMaxElapsed] = useState(false);
+  const [pinsRevealed, setPinsRevealed] = useState(false);
   const completedRef = useRef(false);
 
   const businessName = business?.name ?? '';
 
-  // Min duration timer
+  // Screenshot is ready if: the fetch finished (done|error), or it was never started
+  // (no domain to screenshot — don't block the step waiting for it).
+  const screenshotTiming = fetchTimings.screenshot;
+  const screenshotReady =
+    !screenshotTiming || screenshotTiming.status === 'done' || screenshotTiming.status === 'error';
+
+  const handleAllPinsRevealed = useCallback(() => setPinsRevealed(true), []);
+
   useEffect(() => {
-    const timer = setTimeout(() => setMinElapsed(true), MIN_DURATION_MS);
-    return () => clearTimeout(timer);
+    const min = setTimeout(() => setMinElapsed(true), MIN_DURATION_MS);
+    const max = setTimeout(() => setMaxElapsed(true), MAX_DURATION_MS);
+    return () => {
+      clearTimeout(min);
+      clearTimeout(max);
+    };
   }, []);
 
-  // Auto-advance when both min time elapsed and chain discovery done
   useEffect(() => {
-    if (minElapsed && chainDiscoveryDone && !completedRef.current) {
-      completedRef.current = true;
-      onComplete();
-    }
-  }, [minElapsed, chainDiscoveryDone, onComplete]);
+    if (completedRef.current) return;
+    const ready =
+      (minElapsed && pinsRevealed && chainDiscoveryDone && screenshotReady) || maxElapsed;
+    if (!ready) return;
+    completedRef.current = true;
+    onComplete();
+  }, [minElapsed, pinsRevealed, chainDiscoveryDone, screenshotReady, maxElapsed, onComplete]);
 
   return (
     <motion.div
@@ -50,7 +65,7 @@ export function StepMapScanning({ onComplete }: StepMapScanningProps) {
 
       {/* Map */}
       <div className="w-full h-full">
-        <GatheringMap locations={locations} isActive />
+        <GatheringMap locations={locations} isActive onAllPinsRevealed={handleAllPinsRevealed} />
       </div>
 
       {/* Progress bar */}

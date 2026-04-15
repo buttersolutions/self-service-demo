@@ -10,6 +10,7 @@ import {
   StepSearch,
   StepMapScanning,
   StepWebsiteScanning,
+  StepWebsitePrompt,
   StepConfirm,
   StepMockup,
   StepDone,
@@ -591,11 +592,69 @@ function OnboardingInner() {
 
   const handleMapScanningComplete = useCallback(async () => {
     if (chainPromiseRef.current) await chainPromiseRef.current;
-    goForward('website-scanning');
+    if (brandPromiseRef.current) await brandPromiseRef.current;
+    if (domainRef.current) {
+      goForward('website-scanning');
+    } else {
+      goForward('website-prompt');
+    }
   }, []);
 
   const handleWebsiteScanningComplete = useCallback(async () => {
     if (brandPromiseRef.current) await brandPromiseRef.current;
+    goForward('confirm');
+  }, []);
+
+  const handleWebsitePromptSubmit = useCallback((rawUrl: string) => {
+    const domain = extractDomain(rawUrl) ?? rawUrl.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!domain) return;
+    domainRef.current = domain;
+    dispatch({ type: 'UPDATE_BUSINESS', payload: { domain } });
+
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'screenshot', label: 'Website Screenshot' } });
+    screenshotPromiseRef.current = fetch('/api/screenshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'done' } });
+        if (d.screenshot) dispatch({ type: 'UPDATE_BUSINESS', payload: { screenshot: d.screenshot } });
+      })
+      .catch(() => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'error' } });
+      });
+
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Brand Extract' } });
+    brandPromiseRef.current = fetch('/api/brand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } });
+        dispatch({
+          type: 'UPDATE_BUSINESS',
+          payload: {
+            logoUrl: data.logoUrl ?? null,
+            brandColors: data.colors?.length > 0 ? data.colors : ['#FFFFFF'],
+            fonts: data.fonts ?? [],
+            ogImage: data.ogImage ?? null,
+            favicon: data.favicon ?? null,
+            websiteImages: data.websiteImages ?? [],
+          },
+        });
+      })
+      .catch(() => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'error' } });
+      });
+
+    goForward('website-scanning');
+  }, [dispatch]);
+
+  const handleWebsitePromptSkip = useCallback(() => {
     goForward('confirm');
   }, []);
 
@@ -702,6 +761,16 @@ function OnboardingInner() {
           <StepMapScanning
             key="step-map-scanning"
             onComplete={handleMapScanningComplete}
+          />
+        )}
+
+        {step === 'website-prompt' && (
+          <StepWebsitePrompt
+            key="step-website-prompt"
+            direction={directionRef.current}
+            loading={false}
+            onSubmit={handleWebsitePromptSubmit}
+            onSkip={handleWebsitePromptSkip}
           />
         )}
 
