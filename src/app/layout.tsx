@@ -18,6 +18,9 @@ const merriweather = Merriweather({
 export const metadata: Metadata = {
   title: "All Gravy",
   description: "Get your business online in minutes",
+  other: {
+    "facebook-domain-verification": "u83lyqzdb3umve835jpddb537v",
+  },
 };
 
 export default function RootLayout({
