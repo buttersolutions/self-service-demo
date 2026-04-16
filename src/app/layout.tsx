@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   title: "All Gravy",
   description: "Get your business online in minutes",
   other: {
-    "facebook-domain-verification": "u83lyqzdb3umve835jpddb537v",
+    "facebook-domain-verification": "o83rlyqezdsi7umrw635rjedd8c37y",
   },
 };
 
