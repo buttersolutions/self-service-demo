@@ -55,6 +55,8 @@ interface VerifyOtpRequest {
 interface VerifyOtpResponse {
   code: string;
   isNewUser: boolean;
+  accountId?: string;
+  orgId?: string;
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────── */

@@ -296,6 +296,8 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
             } : undefined,
             locationCount: state.locations.length,
             reportId: state.reportId,
+            accountId: result.accountId ?? result.orgId,
+            isNewUser: result.isNewUser,
             source: 'self-service',
           }),
           keepalive: true,
