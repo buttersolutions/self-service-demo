@@ -279,6 +279,29 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
     }
     const result = await verifyOtp({ email, otp, fullName, phoneNumber: fullPhone });
     if (result) {
+      // Fire lead webhook (non-blocking)
+      const webhookUrl = process.env.NEXT_PUBLIC_LEAD_WEBHOOK_URL;
+      if (webhookUrl) {
+        fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            fullName,
+            phoneNumber: fullPhone,
+            countryCode: countryCode.code,
+            business: state.business ? {
+              name: state.business.name,
+              domain: state.business.domain,
+            } : undefined,
+            locationCount: state.locations.length,
+            reportId: state.reportId,
+            source: 'self-service',
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+
       if (result.isNewUser === false) {
         toast.info('Account already exists — redirecting to log in...');
         setTimeout(() => {
