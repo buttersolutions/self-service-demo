@@ -42,6 +42,12 @@ export async function sendMetaCapiEvent(input: CapiInput): Promise<void> {
   if (emailHash) userData.em = [emailHash];
   const phoneHash = sha256Lower(input.userData?.phone);
   if (phoneHash) userData.ph = [phoneHash];
+  const fnHash = sha256Lower(input.userData?.firstName);
+  if (fnHash) userData.fn = [fnHash];
+  const lnHash = sha256Lower(input.userData?.lastName);
+  if (lnHash) userData.ln = [lnHash];
+  const countryHash = sha256Lower(input.userData?.country);
+  if (countryHash) userData.country = [countryHash];
   const externalIdHash = sha256Lower(input.userData?.externalId);
   if (externalIdHash) userData.external_id = [externalIdHash];
 

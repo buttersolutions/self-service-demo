@@ -19,5 +19,8 @@ export type TrackEventName = TrackEvent['name'];
 export interface TrackUserData {
   email?: string;
   phone?: string;
+  firstName?: string;
+  lastName?: string;
+  country?: string;
   externalId?: string;
 }
