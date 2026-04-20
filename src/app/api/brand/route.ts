@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import { scrapeWebsiteBranding, scrapeForBusinessDomain, type FirecrawlBrandData } from '@/lib/firecrawl';
 
+const LOGO_DEV_PUBLIC_KEY = process.env.LOGO_DEV_PUBLIC_KEY;
+
+function buildLogoDevUrl(domain: string | null): string | null {
+  if (!domain || !LOGO_DEV_PUBLIC_KEY) return null;
+  const cleaned = domain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!cleaned) return null;
+  return `https://img.logo.dev/${cleaned}?token=${LOGO_DEV_PUBLIC_KEY}&size=128&format=png`;
+}
+
 function buildResponse(branding: FirecrawlBrandData | null, domain: string, discoveredDomain?: string | null) {
+  const resolvedDomain = discoveredDomain ?? domain ?? null;
+  const logoDevUrl = buildLogoDevUrl(resolvedDomain);
+
   if (!branding) {
     return {
       name: null,
       logoUrl: null,
+      logoDevUrl,
       colors: ['#FFFFFF'],
       fonts: [],
       ogImage: null,
@@ -28,6 +41,7 @@ function buildResponse(branding: FirecrawlBrandData | null, domain: string, disc
   return {
     name: branding.name ?? null,
     logoUrl: branding.logo ?? null,
+    logoDevUrl,
     colors: uniqueColors.length > 0 ? uniqueColors : ['#FFFFFF'],
     fonts: branding.fonts.map((f) => f.family).filter(Boolean),
     ogImage: branding.ogImage ?? null,

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { OnboardingButton, OnboardingInput } from '../ui';
 import { useOnboarding } from '@/lib/demo-flow-context';
+import { resolveLogo } from '@/lib/safe-logo';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
 import type { LocationItem } from '../types';
 import type { PlacePhoto } from '@/lib/types';
@@ -88,12 +89,15 @@ const fadeUp = { initial: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }
 function FeedReplica({
   businessName,
   logoUrl,
+  logoIsSquare,
   primaryColor,
   photos,
   animate,
 }: {
   businessName: string;
   logoUrl: string | null;
+  /** When true, logoUrl is a logo.dev square asset — render in a fixed square frame. */
+  logoIsSquare: boolean;
   primaryColor: string;
   photos: PlacePhoto[];
   animate: boolean;
@@ -111,16 +115,25 @@ function FeedReplica({
         animate={animate ? fadeUp.visible : fadeUp.initial}
         transition={stagger(0.3, 0)}
       >
-        {/* Logo */}
+        {/* Logo. logo.dev fallback renders as a fixed square; the native
+            Firecrawl logo renders wordmark-style with a height cap. */}
         <div className="flex items-center w-[200px]">
-          <div
-            className="size-10 rounded-xl flex items-center justify-center overflow-hidden shrink-0 bg-white border border-gray-200/80"
-            style={!logoUrl ? { backgroundColor: primaryColor, borderColor: 'transparent' } : undefined}
-          >
-            {logoUrl ? (
-              <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
-            ) : null}
-          </div>
+          {logoUrl ? (
+            logoIsSquare ? (
+              <div className="size-12 rounded-md bg-white border border-gray-200/80 overflow-hidden">
+                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <img src={logoUrl} alt="" className="h-10 w-auto max-w-[180px] object-contain" />
+            )
+          ) : (
+            <div
+              className="size-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+              style={{ backgroundColor: primaryColor }}
+            >
+              {businessName.charAt(0).toUpperCase() || 'A'}
+            </div>
+          )}
         </div>
 
         {/* Nav tabs */}
@@ -477,6 +490,7 @@ const FEED_THUMBS = [
 function MobileFeedReplica({
   businessName,
   logoUrl,
+  logoIsSquare,
   primaryColor,
   headerColor,
   photos,
@@ -484,6 +498,8 @@ function MobileFeedReplica({
 }: {
   businessName: string;
   logoUrl: string | null;
+  /** When true, logoUrl is a logo.dev square asset — render in a fixed square frame. */
+  logoIsSquare: boolean;
   primaryColor: string;
   headerColor: string;
   photos: PlacePhoto[];
@@ -518,9 +534,13 @@ function MobileFeedReplica({
         </div>
         <div className="flex items-center justify-between">
           {logoUrl ? (
-            <div className="size-11 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
-              <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
-            </div>
+            logoIsSquare ? (
+              <div className="size-13 rounded-md bg-white overflow-hidden shrink-0">
+                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <img src={logoUrl} alt="" className="h-12 w-auto max-w-[200px] object-contain" />
+            )
           ) : (
             <span className="text-[26px] font-black text-white">{businessName}</span>
           )}
@@ -726,9 +746,12 @@ export function GatheringBrandedApp({
   photos,
   isActive,
 }: GatheringBrandedAppProps) {
-  const { brandColorMap } = useOnboarding();
+  const { brandColorMap, state } = useOnboarding();
   const primaryColor = brandColorMap.primaryColor;
   const darkestBrandColor = primaryColor;
+  // Logo resolution: src + whether to wrap in a colored pill (for near-white
+  // logos) with wrapColor being the CTA button color (strongest brand signal).
+  const logo = resolveLogo(state.business);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -915,12 +938,16 @@ export function GatheringBrandedApp({
                         width: 64,
                         height: 64,
                         borderRadius: 14,
-                        backgroundColor: primaryColor,
+                        backgroundColor: logo.isSquareFallback ? '#ffffff' : primaryColor,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
                       }}
                     >
-                      {(logoUrl ?? favicon) ? (
-                        <img src={(logoUrl ?? favicon)!} alt="" className="w-full h-full object-contain p-1" />
+                      {logo.src ? (
+                        <img
+                          src={logo.src}
+                          alt=""
+                          className={`w-full h-full object-contain ${logo.isSquareFallback ? '' : 'p-1'}`}
+                        />
                       ) : (
                         <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
                       )}
@@ -936,7 +963,7 @@ export function GatheringBrandedApp({
                   >
                     <LaptopMockup>
                       <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                        <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                        <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} animate={isActive} />
                       </div>
                     </LaptopMockup>
                   </motion.div>
@@ -952,7 +979,8 @@ export function GatheringBrandedApp({
                       <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
                         <MobileFeedReplica
                           businessName={businessName}
-                          logoUrl={logoUrl}
+                          logoUrl={logo.src}
+                          logoIsSquare={logo.isSquareFallback}
                           primaryColor={primaryColor}
                           headerColor={darkestBrandColor}
                           photos={photos}
@@ -977,7 +1005,8 @@ export function GatheringBrandedApp({
                     <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
                       <MobileFeedReplica
                         businessName={businessName}
-                        logoUrl={logoUrl}
+                        logoUrl={logo.src}
+                        logoIsSquare={logo.isSquareFallback}
                         primaryColor={primaryColor}
                         headerColor={darkestBrandColor}
                         photos={photos}
@@ -1042,7 +1071,8 @@ export function GatheringBrandedApp({
         >
           <FeedReplica
             businessName={businessName}
-            logoUrl={logoUrl}
+            logoUrl={logo.src}
+            logoIsSquare={logo.isSquareFallback}
             primaryColor={primaryColor}
             photos={photos}
             animate={expanded}
@@ -1056,7 +1086,8 @@ export function GatheringBrandedApp({
               <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
                 <MobileFeedReplica
                   businessName={businessName}
-                  logoUrl={logoUrl}
+                  logoUrl={logo.src}
+                  logoIsSquare={logo.isSquareFallback}
                   primaryColor={primaryColor}
                   headerColor={darkestBrandColor}
                   photos={photos}

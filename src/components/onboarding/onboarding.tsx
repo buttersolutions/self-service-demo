@@ -226,6 +226,7 @@ function OnboardingInner() {
                   payload: {
                     logoUrl: d.logoUrl ?? data.logo ?? null,
                     brandColors: d.colors?.length > 1 ? d.colors : data.colors ?? ['#FFFFFF'],
+                    logoDevUrl: d.logoDevUrl ?? null,
                     fonts: d.fonts ?? [],
                     ogImage: d.ogImage ?? null,
                     favicon: d.favicon ?? null,
@@ -290,6 +291,7 @@ function OnboardingInner() {
                   logoUrl: data.logoUrl ?? null,
                   domain: resolvedDomain,
                   brandColors: data.colors ?? ['#FFFFFF'],
+                  logoDevUrl: data.logoDevUrl ?? null,
                   fonts: data.fonts ?? [],
                   ogImage: data.ogImage ?? null,
                   favicon: data.favicon ?? null,
@@ -495,6 +497,7 @@ function OnboardingInner() {
           payload: {
             logoUrl: data.logoUrl ?? null,
             brandColors: data.colors?.length > 0 ? data.colors : ['#FFFFFF'],
+            logoDevUrl: data.logoDevUrl ?? null,
             fonts: data.fonts ?? [],
             ogImage: data.ogImage ?? null,
             favicon: data.favicon ?? null,

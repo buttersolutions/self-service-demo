@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useOnboarding } from '@/lib/demo-flow-context';
+import { resolveLogo } from '@/lib/safe-logo';
 import type { LocationItem } from '../types';
 
 const MAX_COLORS = 3;
@@ -297,6 +298,7 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
               logoUrl: data.logoUrl ?? null,
               domain: trimmed,
               brandColors: data.colors ?? ['#FFFFFF'],
+              logoDevUrl: data.logoDevUrl ?? null,
               fonts: data.fonts ?? [],
               ogImage: data.ogImage ?? null,
               websiteImages: data.websiteImages ?? [],
@@ -312,8 +314,15 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
   const handleConfirm = useCallback(() => {
     if (!valid || buttonLoading) return;
     setButtonLoading(true);
+    // Lock in the resolved logo choice — whichever URL the cascade picked
+    // becomes THE logoUrl everyone downstream uses. This prevents later code
+    // paths from re-resolving and potentially landing on a different logo.
+    const chosen = resolveLogo(business);
+    if (chosen.src && chosen.src !== business?.logoUrl) {
+      dispatch({ type: 'UPDATE_BUSINESS', payload: { logoUrl: chosen.src, logoIsLight: false } });
+    }
     onConfirm({ name: name.trim(), website: website.trim(), colors, locations });
-  }, [valid, buttonLoading, name, website, colors, locations, onConfirm]);
+  }, [valid, buttonLoading, name, website, colors, locations, business, dispatch, onConfirm]);
 
   const handleColorChange = (index: number, hex: string) => {
     setColors((prev) => prev.map((c, i) => (i === index ? hex : c)));
@@ -354,22 +363,41 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
         className="mb-6 flex items-center justify-center"
         variants={popVariants}
       >
-        {business?.logoUrl || business?.favicon ? (
-          <div className="size-20 rounded-2xl bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] flex items-center justify-center overflow-hidden">
-            <img
-              src={(business.logoUrl ?? business.favicon)!}
-              alt={business.name}
-              className="max-w-full max-h-full object-contain p-2"
-            />
-          </div>
-        ) : (
-          <div
-            className="size-20 rounded-2xl flex items-center justify-center text-2xl font-bold border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]"
-            style={{ backgroundColor: brandColorMap.primaryColor, color: brandColorMap.primaryTextColor }}
-          >
-            {(business?.name ?? 'A').charAt(0)}
-          </div>
-        )}
+        {(() => {
+          const logo = resolveLogo(business);
+          if (!logo.src) {
+            return (
+              <div
+                className="size-20 rounded-[30px] flex items-center justify-center text-2xl font-bold border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]"
+                style={{ backgroundColor: brandColorMap.primaryColor, color: brandColorMap.primaryTextColor }}
+              >
+                {(business?.name ?? 'A').charAt(0)}
+              </div>
+            );
+          }
+          if (logo.isSquareFallback) {
+            // logo.dev: curated 128px square asset — fill the frame edge-to-edge
+            return (
+              <div className="size-20 rounded-[30px] bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden">
+                <img
+                  src={logo.src}
+                  alt={business?.name ?? ''}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            );
+          }
+          // Firecrawl logo (detected dark): render natively with height cap for wordmarks
+          return (
+            <div className="h-20 min-w-20 px-3 rounded-[30px] border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] flex items-center justify-center overflow-hidden bg-white">
+              <img
+                src={logo.src}
+                alt={business?.name ?? ''}
+                className="max-h-full w-auto max-w-[220px] object-contain py-3"
+              />
+            </div>
+          );
+        })()}
       </motion.div>
 
       <motion.h1

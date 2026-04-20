@@ -195,6 +195,55 @@ export async function scrapeWebsiteBranding(
   let logo: string | null = llmLogoTrusted ? llmLogo : null;
   let logoSource: 'llm' | 'url-match' | null = llmLogoTrusted ? 'llm' : null;
 
+  // Many sites ship both a dark and a light variant (e.g. `logo-white.svg`
+  // for dark hero backgrounds, `logo.svg` / `logo-dark.svg` for the rest).
+  // Firecrawl's LLM often picks whichever appears in the header — for sites
+  // with a dark hero, that's the light variant, which then disappears on
+  // our white mockup. Detect by URL keyword and try to swap.
+  const looksLikeLightVariant = (url: string | null): boolean => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return /(?:[-_./])(?:white|light|inverse|inverted|negative|reversed|knockout|alt)(?:[-_./]|$)/.test(lower);
+  };
+
+  if (logo && looksLikeLightVariant(logo) && websiteImages.length > 0) {
+    const candidates = [
+      logo.replace(/([-_./])white([-_./]|$)/gi, '$1dark$2'),
+      logo.replace(/([-_./])light([-_./]|$)/gi, '$1dark$2'),
+      logo.replace(/([-_./])white([-_./]|$)/gi, '$2').replace(/--/g, '-'),
+      logo.replace(/([-_./])light([-_./]|$)/gi, '$2').replace(/--/g, '-'),
+      logo.replace(/[-_]white/gi, ''),
+      logo.replace(/[-_]light/gi, ''),
+    ].filter((c) => c !== logo);
+
+    for (const candidate of candidates) {
+      if (websiteImages.includes(candidate)) {
+        logo = candidate;
+        logoSource = 'llm';
+        break;
+      }
+    }
+
+    // If no direct-swap worked, try finding any non-light image with a
+    // similar filename root (business-name match)
+    if (looksLikeLightVariant(logo) && businessName) {
+      const nameWords = businessName.toLowerCase().split(/\s+/).filter((w: string) => w.length >= 3);
+      for (const imgUrl of websiteImages) {
+        if (looksLikeNonLogo(imgUrl) || looksLikeLightVariant(imgUrl)) continue;
+        try {
+          const path = new URL(imgUrl).pathname.toLowerCase();
+          if (path.includes('logo') && nameWords.some((w: string) => path.includes(w))) {
+            logo = imgUrl;
+            logoSource = 'url-match';
+            break;
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  }
+
   if (!logo && businessName && websiteImages.length > 0) {
     // Normalize diacritics + Nordic characters for fuzzy matching
     const stripAccents = (s: string) =>

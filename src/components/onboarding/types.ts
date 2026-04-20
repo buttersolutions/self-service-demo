@@ -27,6 +27,18 @@ export interface BusinessData {
   favicon?: string | null;
   websiteImages?: string[];
   instagramUsername?: string | null;
+  /**
+   * True when the primary logo image is near-white and would be invisible on
+   * a white background. Set by a client-side pixel sampling pass. When true
+   * we fall back to `logoDevUrl` instead of rendering the Firecrawl logo.
+   */
+  logoIsLight?: boolean;
+  /**
+   * Logo.dev fallback URL — a curated, always-square, always-bg-safe logo
+   * from logo.dev's business catalog. Used when the Firecrawl logo is
+   * missing or is detected as near-white.
+   */
+  logoDevUrl?: string | null;
 }
 
 export interface FetchTiming {
