@@ -34,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${merriweather.variable} antialiased`}>
+      <body className={`${inter.variable} ${merriweather.variable} font-sans antialiased`}>
         {GTM_ID && <GoogleTagManager gtmId={GTM_ID} />}
         <ConsentBanner />
         {children}

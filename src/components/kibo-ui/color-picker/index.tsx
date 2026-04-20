@@ -343,6 +343,62 @@ const PercentageInput = ({ className, ...props }: PercentageInputProps) => {
   );
 };
 
+const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
+
+function HexField() {
+  const { hue, saturation, lightness, alpha, setHue, setSaturation, setLightness } = useColorPicker();
+  const pickerHex = Color.hsl(hue, saturation, lightness, alpha / 100).hex();
+  const [draft, setDraft] = useState(pickerHex);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(pickerHex);
+  }, [pickerHex, focused]);
+
+  const commit = useCallback(
+    (raw: string) => {
+      const trimmed = raw.trim();
+      if (!HEX_RE.test(trimmed)) return;
+      const hex = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+      try {
+        const c = Color(hex);
+        const [h, s, l] = c.hsl().array();
+        setHue(Number.isNaN(h) ? 0 : h);
+        setSaturation(s);
+        setLightness(l);
+      } catch {
+        // ignore invalid color
+      }
+    },
+    [setHue, setSaturation, setLightness]
+  );
+
+  return (
+    <Input
+      className="h-8 rounded-r-none bg-secondary px-2 text-xs shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent outline-none"
+      type="text"
+      value={draft}
+      onChange={(e) => {
+        const v = e.target.value;
+        setDraft(v);
+        if (HEX_RE.test(v.trim())) commit(v);
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        commit(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit(draft);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
+}
+
 export type ColorPickerFormatProps = HTMLAttributes<HTMLDivElement>;
 
 export const ColorPickerFormat = ({
@@ -353,8 +409,6 @@ export const ColorPickerFormat = ({
   const color = Color.hsl(hue, saturation, lightness, alpha / 100);
 
   if (mode === "hex") {
-    const hex = color.hex();
-
     return (
       <div
         className={cn(
@@ -363,12 +417,7 @@ export const ColorPickerFormat = ({
         )}
         {...props}
       >
-        <Input
-          className="h-8 rounded-r-none bg-secondary px-2 text-xs shadow-none"
-          readOnly
-          type="text"
-          value={hex}
-        />
+        <HexField />
         <PercentageInput value={alpha} />
       </div>
     );

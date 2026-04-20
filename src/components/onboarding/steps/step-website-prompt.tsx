@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { OnboardingInput, OnboardingButton, ProgressBar } from '../ui';
+import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import { isValidUrl } from '@/lib/mock-data-v2';
 
@@ -22,7 +22,7 @@ export function StepWebsitePrompt({ direction, loading, onSubmit, onSkip }: Step
   };
 
   return (
-    <>
+    <div className="w-full h-full overflow-y-auto flex items-center justify-center py-12">
       <motion.div
         className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8"
         custom={direction}
@@ -84,10 +84,6 @@ export function StepWebsitePrompt({ direction, loading, onSubmit, onSkip }: Step
           I don't have a website
         </motion.button>
       </motion.div>
-
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-8 max-w-xl">
-        <ProgressBar current={1} />
-      </div>
-    </>
+    </div>
   );
 }

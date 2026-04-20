@@ -113,11 +113,14 @@ function FeedReplica({
       >
         {/* Logo */}
         <div className="flex items-center w-[200px]">
-          {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-8 object-contain rounded-lg" />
-          ) : (
-            <div className="h-8 w-24 rounded-md" style={{ backgroundColor: primaryColor }} />
-          )}
+          <div
+            className="size-10 rounded-xl flex items-center justify-center overflow-hidden shrink-0 bg-white border border-gray-200/80"
+            style={!logoUrl ? { backgroundColor: primaryColor, borderColor: 'transparent' } : undefined}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
+            ) : null}
+          </div>
         </div>
 
         {/* Nav tabs */}
@@ -515,7 +518,9 @@ function MobileFeedReplica({
         </div>
         <div className="flex items-center justify-between">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-11 object-contain rounded-lg" />
+            <div className="size-11 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
+              <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
+            </div>
           ) : (
             <span className="text-[26px] font-black text-white">{businessName}</span>
           )}

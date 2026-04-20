@@ -1,5 +1,6 @@
 export { StepSearch } from './step-search';
 export { StepMapScanning } from './step-map-scanning';
+export { StepPhotosScanning } from './step-photos-scanning';
 export { StepWebsiteScanning } from './step-website-scanning';
 export { StepWebsitePrompt } from './step-website-prompt';
 export { StepConfirm } from './step-confirm';

@@ -3,22 +3,10 @@
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ProgressSidebar } from './progress-sidebar';
+import { STEPS_BY_VARIANT, type ProgressBarVariant } from './progress-steps';
 
-const STEPS_BY_VARIANT = {
-  default: [
-    'Find your business',
-    'App Branding',
-    'Get your app',
-  ],
-  feedback: [
-    'Find your business',
-    'Your guest report',
-    'Your solution',
-    'Get the app',
-  ],
-} as const;
-
-export type ProgressBarVariant = keyof typeof STEPS_BY_VARIANT;
+export type { ProgressBarVariant } from './progress-steps';
 
 interface ProgressBarProps {
   current: number; // 0-indexed into the variant's step list
@@ -27,14 +15,14 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ current, variant = 'default', className }: ProgressBarProps) {
+  // On subsequent steps, render as a fixed left sidebar instead of the bottom bar.
+  if (current > 0) {
+    return <ProgressSidebar current={current} variant={variant} />;
+  }
+
   const STEPS = STEPS_BY_VARIANT[variant];
   return (
-    <div
-      className={cn(
-        'bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200/60 px-3 sm:px-8 py-4 w-full mx-auto',
-        className,
-      )}
-    >
+    <div className={cn('relative rounded-2xl px-3 sm:px-8 py-4 w-full mx-auto', className)}>
       <div className="relative">
         {/* Connecting lines — laid out between dot centers */}
         <div className="absolute top-[10px] left-0 right-0 flex">

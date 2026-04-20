@@ -4,11 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Globe, Palette, Loader2 } from 'lucide-react';
 import { TypewriterSearch } from '../ui/typewriter-search';
-import { ProgressBar } from '../ui/progress-bar';
 import { useOnboarding } from '@/lib/demo-flow-context';
 
-const MIN_DURATION_MS = 3000;
-const SHOW_RESULT_MS = 2500;
+const MIN_DURATION_MS = 1500;
+const SHOW_RESULT_MS = 1000;
 const MAX_DURATION_MS = 15000;
 
 interface StepWebsiteScanningProps {
@@ -87,7 +86,7 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
   if (isInstagram) {
     return (
       <motion.div
-        className="relative w-full h-dvh flex items-center justify-center bg-gray-50/40"
+        className="relative w-full h-full flex items-center justify-center bg-gray-50/40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -180,9 +179,6 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
           )}
         </div>
 
-        <div className="absolute bottom-6 z-30 w-full px-8 left-1/2 -translate-x-1/2 max-w-xl">
-          <ProgressBar current={1} />
-        </div>
       </motion.div>
     );
   }
@@ -190,7 +186,7 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
   // ── Website mode: browser window animation ──
   return (
     <motion.div
-      className="relative w-full h-dvh flex items-center justify-center bg-gray-50/40"
+      className="relative w-full h-full flex items-center justify-center bg-gray-50/40"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -206,15 +202,15 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <div className="rounded-xl overflow-hidden shadow-2xl border border-gray-200 bg-white">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 border-b border-gray-200">
+        <div className="rounded-2xl overflow-hidden border border-gray-200/80 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-200/80">
             <div className="flex items-center gap-1.5">
               <div className="size-3 rounded-full bg-red-400/60" />
               <div className="size-3 rounded-full bg-yellow-400/60" />
               <div className="size-3 rounded-full bg-green-400/60" />
             </div>
             <div className="flex-1 flex items-center justify-center">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-white border border-gray-200 text-xs text-gray-500 max-w-xs w-full">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white border border-gray-200/80 text-xs text-gray-500 max-w-xs w-full">
                 <Globe className="size-3 shrink-0 text-gray-400" />
                 <span className="truncate">{domain || businessName}</span>
               </div>
@@ -303,9 +299,6 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
         )}
       </motion.div>
 
-      <div className="absolute bottom-6 z-30 w-full px-8 left-1/2 -translate-x-1/2 max-w-xl">
-        <ProgressBar current={1} />
-      </div>
     </motion.div>
   );
 }

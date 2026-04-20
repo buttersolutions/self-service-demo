@@ -3,20 +3,20 @@
 import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
+import { OnboardingShell } from './ui/onboarding-shell';
 import {
   StepSearch,
   StepMapScanning,
+  StepPhotosScanning,
   StepWebsiteScanning,
   StepWebsitePrompt,
   StepConfirm,
   StepMockup,
   StepDone,
 } from './steps';
-import type { FetchTiming, LocationItem, ReviewItem, Step } from './types';
-import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, ReviewInsight, ReviewAnalysis } from '@/lib/types';
+import type { FetchTiming, LocationItem, Step } from './types';
+import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse } from '@/lib/types';
 import { OnboardingProvider, useOnboarding } from '@/lib/demo-flow-context';
 import { extractDomain, classifyWebsiteUri } from '@/lib/domain-utils';
 import { track } from '@/lib/tracking/track';
@@ -67,6 +67,10 @@ function OnboardingInner() {
   const brandPromiseRef = useRef<Promise<void> | null>(null);
   const chainPromiseRef = useRef<Promise<void> | null>(null);
   const screenshotPromiseRef = useRef<Promise<void> | null>(null);
+  const photosCountRef = useRef(0);
+  useEffect(() => {
+    photosCountRef.current = gatheringData.photos.length;
+  }, [gatheringData.photos.length]);
 
   const goForward = (next: Step) => {
     directionRef.current = 1;
@@ -99,162 +103,6 @@ function OnboardingInner() {
       });
   }, [dispatch]);
 
-  const startReviewsFetch = useCallback((placeIds: string[]) => {
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Apify Reviews' } });
-    fetch('/api/reviews', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ placeIds: placeIds.slice(0, 5), limit: 10 }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        const apifyReviews: ReviewItem[] = data.reviews ?? [];
-        dispatch({ type: 'MERGE_REVIEWS', payload: apifyReviews });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'done' } });
-      })
-      .catch((err: unknown) => {
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
-      });
-  }, [dispatch]);
-
-  const startReviewAnalysisFetch = useCallback((confirmedLocs: LocationItem[], lite = true) => {
-    const places: PlaceSummary[] = confirmedLocs.map((loc) => ({
-      placeId: loc.id,
-      displayName: loc.name,
-      formattedAddress: loc.address,
-      location: { lat: loc.lat, lng: loc.lng },
-    }));
-
-    const trackKey = lite ? 'reviewAnalysis' : 'reviewAnalysisFull';
-    const trackLabel = lite ? 'Review Analysis (SSE lite)' : 'Review Analysis (SSE full)';
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: trackKey, label: trackLabel } });
-
-    fetch(`/api/demo/scan/analyze${lite ? '?lite=1' : ''}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locations: places }),
-    })
-      .then(async (res) => {
-        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `connected (${res.status})` } });
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let currentEvent = '';
-        let insightCount = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          let boundary: number;
-          while ((boundary = buffer.indexOf('\n\n')) !== -1) {
-            const message = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 2);
-
-            let eventName = '';
-            let eventData = '';
-
-            for (const line of message.split('\n')) {
-              if (line.startsWith('event: ')) {
-                eventName = line.slice(7).trim();
-              } else if (line.startsWith('data: ')) {
-                eventData = line.slice(6);
-              }
-            }
-
-            if (!eventName && currentEvent) eventName = currentEvent;
-            if (eventName) currentEvent = eventName;
-
-            if (eventName && eventData) {
-              try {
-                const data = JSON.parse(eventData);
-                if (eventName === 'batch_analysis') {
-                  const insights = data.insights as ReviewInsight[];
-                  insightCount += insights.length;
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
-                  dispatch({ type: 'APPEND_REVIEW_INSIGHTS', payload: insights });
-                } else if (eventName === 'analysis_update') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis_update: preview` } });
-                  // Detect new v2 format (has executive_summary) vs legacy (has headline)
-                  if (data.executive_summary !== undefined) {
-                    dispatch({ type: 'SET_GUEST_FEEDBACK_REPORT_PREVIEW', payload: data });
-                  } else {
-                    dispatch({ type: 'SET_REVIEW_ANALYSIS_PREVIEW', payload: data as ReviewAnalysis });
-                  }
-                } else if (eventName === 'aggregates') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `aggregates` } });
-                } else if (eventName === 'analysis') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis: final` } });
-                  // Detect new v2 format vs legacy
-                  if (data.executive_summary !== undefined) {
-                    dispatch({ type: 'SET_GUEST_FEEDBACK_REPORT', payload: data });
-                  } else {
-                    dispatch({ type: 'SET_REVIEW_ANALYSIS', payload: data as ReviewAnalysis });
-                  }
-                } else if (eventName === 'error') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
-                } else if (eventName === 'timing') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `timing: ${data.label} (${data.detail ?? ''})` } });
-                } else if (eventName === 'reviews_progress') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
-                  dispatch({ type: 'APPEND_REVIEW_PROGRESS', payload: { placeId: data.placeId, displayName: data.displayName, reviewCount: data.reviewCount, sort: data.sort } });
-                } else if (eventName === 'done') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'done' } });
-                } else {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `${eventName}` } });
-                }
-              } catch {
-                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `parse-error: ${eventName}` } });
-              }
-            }
-          }
-        }
-
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'stream closed' } });
-
-        dispatch({
-          type: 'SET_REVIEW_ANALYSIS_FALLBACK',
-          payload: {
-            headline: '',
-            body: '',
-            insights: [],
-            totalReviewsAnalyzed: 0,
-            positiveCount: 0,
-            negativeCount: 0,
-            categoryBreakdown: [],
-            strengths: [],
-            opportunities: [],
-          },
-        });
-
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'done' } });
-      })
-      .catch((err: unknown) => {
-        dispatch({
-          type: 'SET_REVIEW_ANALYSIS',
-          payload: {
-            headline: '',
-            body: '',
-            insights: [],
-            totalReviewsAnalyzed: 0,
-            positiveCount: 0,
-            negativeCount: 0,
-            categoryBreakdown: [],
-            strengths: [],
-            opportunities: [],
-          },
-        });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
-      });
-  }, [dispatch]);
-
   const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
     dispatch({ type: 'SET_SELECTED_PLACE', payload: place });
     dispatch({ type: 'SET_LOADING', payload: true });
@@ -267,7 +115,6 @@ function OnboardingInner() {
     const uriResult = classifyWebsiteUri(place.websiteUri);
     const domain = uriResult.type === 'domain' ? uriResult.domain : undefined;
 
-    // Fire primary location review scrape immediately (parallel with everything else)
     const primaryLoc: LocationItem = {
       id: place.placeId,
       name: place.displayName,
@@ -278,8 +125,6 @@ function OnboardingInner() {
       userRatingCount: place.userRatingCount,
       rating: place.rating,
     };
-    startReviewsFetch([place.placeId]);
-    startReviewAnalysisFetch([primaryLoc]);
 
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
     if (uriResult.type !== 'social') {
@@ -518,17 +363,6 @@ function OnboardingInner() {
           .then((res) => res.json() as Promise<PlaceDetailsResponse>)
           .then((data) => {
             const allDetails = data.details ?? [];
-            const allReviews = allDetails.flatMap((d) =>
-              (d.reviews ?? []).map((r) => ({
-                author: r.authorName,
-                rating: r.rating,
-                text: r.text,
-                date: r.relativePublishTimeDescription,
-              })),
-            );
-            if (allReviews.length > 0) {
-              dispatch({ type: 'MERGE_REVIEWS', payload: allReviews });
-            }
             const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
             if (allPhotos.length > 0) {
               dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
@@ -543,7 +377,7 @@ function OnboardingInner() {
 
     dispatch({ type: 'SET_LOADING', payload: false });
     goForward('map-scanning');
-  }, [dispatch, startReviewsFetch, startReviewAnalysisFetch]);
+  }, [dispatch]);
 
   // Auto-submit when URL params are present (e.g. ?place_id=...&name=...&address=...)
   // Fetches full place details from Google first so chain discovery has website/location data
@@ -596,9 +430,24 @@ function OnboardingInner() {
       });
   }, [searchParams, handleSearchSubmit, dispatch]);
 
-  const handleMapScanningComplete = useCallback(async () => {
-    if (chainPromiseRef.current) await chainPromiseRef.current;
-    if (brandPromiseRef.current) await brandPromiseRef.current;
+  const handleMapScanningComplete = useCallback(() => {
+    // Don't await chain/brand promises — they continue in the background and
+    // downstream steps (photos-scanning, website-scanning) handle their own
+    // loading states. Blocking here was the main reason the map step got
+    // stuck for a long time when Google Places or Firecrawl was slow.
+    if (photosCountRef.current > 0) {
+      goForward('photos-scanning');
+      return;
+    }
+
+    if (domainRef.current) {
+      goForward('website-scanning');
+    } else {
+      goForward('website-prompt');
+    }
+  }, []);
+
+  const handlePhotosScanningComplete = useCallback(() => {
     if (domainRef.current) {
       goForward('website-scanning');
     } else {
@@ -675,15 +524,9 @@ function OnboardingInner() {
       const domain = domainRef.current ?? data.website;
       startBackgroundFetch(domain);
 
-      // Kick off full reviews for all confirmed locations
-      if (data.locations.length > 0) {
-        startReviewsFetch(data.locations.map((l) => l.id));
-        startReviewAnalysisFetch(data.locations, false);
-      }
-
       goForward('mockup');
     },
-    [startBackgroundFetch, startReviewsFetch, startReviewAnalysisFetch, dispatch],
+    [startBackgroundFetch, dispatch],
   );
 
   const handleBack = useCallback(() => {
@@ -693,50 +536,21 @@ function OnboardingInner() {
     }
   }, [step, dispatch]);
 
-  // Generate feed posts when analysis is ready
-  const feedPostsGeneratedRef = useRef(false);
-  useEffect(() => {
-    if (!gatheringData.reviewAnalysis || feedPostsGeneratedRef.current) return;
-    if (!business?.name) return;
-    feedPostsGeneratedRef.current = true;
-
-    fetch('/api/demo/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ businessName: business.name, analysis: gatheringData.reviewAnalysis }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.posts?.length > 0) {
-          dispatch({ type: 'SET_FEED_POSTS', payload: data.posts });
-        }
-      })
-      .catch(() => {});
-  }, [gatheringData.reviewAnalysis, business?.name, dispatch]);
-
-  const showBack = step === 'confirm';
   const showLogo = step === 'search';
-  const showIllustrations = step !== 'mockup' && step !== 'done' && step !== 'map-scanning' && step !== 'website-scanning';
-  const isFullBleed = step === 'mockup' || step === 'done' || step === 'map-scanning' || step === 'website-scanning';
+  const isShellStep =
+    step === 'map-scanning' ||
+    step === 'photos-scanning' ||
+    step === 'website-prompt' ||
+    step === 'website-scanning' ||
+    step === 'confirm';
+  const showIllustrations = step === 'search';
 
   return (
-    <div className={`relative flex flex-col items-center min-h-dvh bg-gray-50/40 font-sans ${isFullBleed ? 'overflow-hidden' : 'overflow-y-auto justify-center py-12'}`}>
-      <AnimatePresence>
-        {showBack && (
-          <motion.div
-            className="fixed top-5 left-5 z-50"
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -12 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ChevronLeft className="size-5" />
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+    <div
+      className={`relative flex flex-col items-center min-h-dvh bg-gray-50/40 font-sans overflow-hidden ${
+        step === 'search' ? 'justify-center py-12' : ''
+      }`}
+    >
       <AnimatePresence>
         {showLogo && (
           <motion.div
@@ -763,36 +577,40 @@ function OnboardingInner() {
           />
         )}
 
-        {step === 'map-scanning' && (
-          <StepMapScanning
-            key="step-map-scanning"
-            onComplete={handleMapScanningComplete}
-          />
-        )}
-
-        {step === 'website-prompt' && (
-          <StepWebsitePrompt
-            key="step-website-prompt"
-            direction={directionRef.current}
-            loading={false}
-            onSubmit={handleWebsitePromptSubmit}
-            onSkip={handleWebsitePromptSkip}
-          />
-        )}
-
-        {step === 'website-scanning' && (
-          <StepWebsiteScanning
-            key="step-website-scanning"
-            onComplete={handleWebsiteScanningComplete}
-          />
-        )}
-
-        {step === 'confirm' && (
-          <StepConfirm
-            key="step-confirm"
-            direction={directionRef.current}
-            onConfirm={handleConfirm}
-          />
+        {isShellStep && (
+          <OnboardingShell
+            key="step-shell"
+            current={1}
+            onBack={step === 'confirm' ? handleBack : undefined}
+          >
+            <AnimatePresence mode="wait" custom={directionRef.current}>
+              {step === 'map-scanning' && (
+                <StepMapScanning key="map-scanning" onComplete={handleMapScanningComplete} />
+              )}
+              {step === 'photos-scanning' && (
+                <StepPhotosScanning key="photos-scanning" onComplete={handlePhotosScanningComplete} />
+              )}
+              {step === 'website-prompt' && (
+                <StepWebsitePrompt
+                  key="website-prompt"
+                  direction={directionRef.current}
+                  loading={false}
+                  onSubmit={handleWebsitePromptSubmit}
+                  onSkip={handleWebsitePromptSkip}
+                />
+              )}
+              {step === 'website-scanning' && (
+                <StepWebsiteScanning key="website-scanning" onComplete={handleWebsiteScanningComplete} />
+              )}
+              {step === 'confirm' && (
+                <StepConfirm
+                  key="confirm"
+                  direction={directionRef.current}
+                  onConfirm={handleConfirm}
+                />
+              )}
+            </AnimatePresence>
+          </OnboardingShell>
         )}
 
         {step === 'mockup' && business && (

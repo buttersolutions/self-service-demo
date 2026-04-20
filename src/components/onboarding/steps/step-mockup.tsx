@@ -16,7 +16,7 @@ export function StepMockup() {
     <div className="relative w-full h-dvh">
       <GatheringBrandedApp
         businessName={business?.name ?? ''}
-        logoUrl={business?.logoUrl ?? null}
+        logoUrl={business?.logoUrl ?? business?.favicon ?? null}
         favicon={business?.favicon ?? null}
         locations={locations}
         photos={gatheringData.photos}

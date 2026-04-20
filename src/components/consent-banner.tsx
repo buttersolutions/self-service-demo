@@ -84,7 +84,7 @@ export function ConsentBanner() {
 
       {decided === false && (
         <div
-          className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-sm z-[100] bg-white border border-gray-200 rounded-lg shadow-lg p-4"
+          className="font-sans fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-sm z-[100] bg-white border border-gray-200 rounded-lg shadow-lg p-4"
           role="dialog"
           aria-label="Cookie consent"
         >

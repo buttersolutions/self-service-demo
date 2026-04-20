@@ -4,11 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { GatheringMap } from '../animations/gathering-map';
 import { TypewriterSearch } from '../ui/typewriter-search';
-import { ProgressBar } from '../ui/progress-bar';
 import { useOnboarding } from '@/lib/demo-flow-context';
 
-const MIN_DURATION_MS = 2000;
-const MAX_DURATION_MS = 20000;
+const MIN_DURATION_MS = 2500;
+const PIN_HOLD_MS = 1000;
+const MAX_DURATION_MS = 8000;
 
 interface StepMapScanningProps {
   onComplete: () => void;
@@ -16,19 +16,14 @@ interface StepMapScanningProps {
 
 export function StepMapScanning({ onComplete }: StepMapScanningProps) {
   const { state } = useOnboarding();
-  const { locations, business, chainDiscoveryDone, fetchTimings } = state;
+  const { locations, business } = state;
   const [minElapsed, setMinElapsed] = useState(false);
   const [maxElapsed, setMaxElapsed] = useState(false);
   const [pinsRevealed, setPinsRevealed] = useState(false);
+  const [pinHoldElapsed, setPinHoldElapsed] = useState(false);
   const completedRef = useRef(false);
 
   const businessName = business?.name ?? '';
-
-  // Screenshot is ready if: the fetch finished (done|error), or it was never started
-  // (no domain to screenshot — don't block the step waiting for it).
-  const screenshotTiming = fetchTimings.screenshot;
-  const screenshotReady =
-    !screenshotTiming || screenshotTiming.status === 'done' || screenshotTiming.status === 'error';
 
   const handleAllPinsRevealed = useCallback(() => setPinsRevealed(true), []);
 
@@ -41,18 +36,29 @@ export function StepMapScanning({ onComplete }: StepMapScanningProps) {
     };
   }, []);
 
+  // Hold on the map for PIN_HOLD_MS after the final pin reveals so the user
+  // can see the completed state before we advance.
+  useEffect(() => {
+    if (!pinsRevealed) return;
+    const t = setTimeout(() => setPinHoldElapsed(true), PIN_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [pinsRevealed]);
+
   useEffect(() => {
     if (completedRef.current) return;
-    const ready =
-      (minElapsed && pinsRevealed && chainDiscoveryDone && screenshotReady) || maxElapsed;
+    // Advance as soon as the first pins have been revealed, a short hold has
+    // elapsed, and the minimum display duration is up. Chain discovery, brand
+    // and screenshot fetches continue in the background — downstream steps
+    // handle their own loading.
+    const ready = (minElapsed && pinsRevealed && pinHoldElapsed) || maxElapsed;
     if (!ready) return;
     completedRef.current = true;
     onComplete();
-  }, [minElapsed, pinsRevealed, chainDiscoveryDone, screenshotReady, maxElapsed, onComplete]);
+  }, [minElapsed, pinsRevealed, pinHoldElapsed, maxElapsed, onComplete]);
 
   return (
     <motion.div
-      className="relative w-full h-dvh"
+      className="relative w-full h-full"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -66,11 +72,6 @@ export function StepMapScanning({ onComplete }: StepMapScanningProps) {
       {/* Map */}
       <div className="w-full h-full">
         <GatheringMap locations={locations} isActive onAllPinsRevealed={handleAllPinsRevealed} />
-      </div>
-
-      {/* Progress bar */}
-      <div className="absolute bottom-6 z-30 w-full px-8 left-1/2 -translate-x-1/2 max-w-xl">
-        <ProgressBar current={1} />
       </div>
 
       {/* Scan line */}

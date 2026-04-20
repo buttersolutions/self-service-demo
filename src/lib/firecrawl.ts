@@ -167,10 +167,35 @@ export async function scrapeWebsiteBranding(
   const llmConfidence = logoMeta.confidence ?? 0;
   const businessName = metadata.ogTitle ?? metadata.title ?? metadata.name ?? '';
 
-  let logo = llmLogo;
-  let logoSource: 'llm' | 'url-match' | null = llmLogo ? 'llm' : null;
+  // Keywords in an image URL that strongly suggest it's NOT a logo
+  // (hero banners, photos, covers, etc.). Used to reject obviously-wrong
+  // "logos" that the LLM or URL-match path sometimes picks.
+  const NON_LOGO_URL_KEYWORDS = [
+    'hero', 'banner', 'cover', 'header-image', 'background',
+    'photo', 'photos', 'gallery', 'slide', 'slider', 'carousel',
+    'thumb', 'thumbnail', 'poster', 'feature', 'featured',
+  ];
 
-  if (llmConfidence < 0.5 && businessName && websiteImages.length > 0) {
+  const looksLikeNonLogo = (url: string | null): boolean => {
+    if (!url) return false;
+    try {
+      const path = new URL(url).pathname.toLowerCase();
+      return NON_LOGO_URL_KEYWORDS.some((kw) => path.includes(kw));
+    } catch {
+      return false;
+    }
+  };
+
+  // Trust the LLM only when confidence is reasonable and the URL doesn't
+  // scream "hero image". Anything below confidence 0.5 or with a suspicious
+  // URL is treated as unreliable and we fall through to URL matching.
+  const llmLogoTrusted =
+    llmLogo && llmConfidence >= 0.5 && !looksLikeNonLogo(llmLogo);
+
+  let logo: string | null = llmLogoTrusted ? llmLogo : null;
+  let logoSource: 'llm' | 'url-match' | null = llmLogoTrusted ? 'llm' : null;
+
+  if (!logo && businessName && websiteImages.length > 0) {
     // Normalize diacritics + Nordic characters for fuzzy matching
     const stripAccents = (s: string) =>
       s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -183,6 +208,7 @@ export async function scrapeWebsiteBranding(
       .filter((w: string) => w.length >= 3);
 
     for (const imgUrl of websiteImages) {
+      if (looksLikeNonLogo(imgUrl)) continue;
       try {
         const decoded = stripAccents(decodeURIComponent(imgUrl).replace(/\+/g, ' ')).toLowerCase();
         const path = new URL(decoded).pathname;

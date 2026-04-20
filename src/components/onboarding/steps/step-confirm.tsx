@@ -4,8 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Loader2 } from 'lucide-react';
 import Color from 'color';
-import { OnboardingInput, OnboardingButton, ProgressBar } from '../ui';
-import type { ProgressBarVariant } from '../ui/progress-bar';
+import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants, popVariants } from '../constants';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
@@ -228,12 +227,11 @@ interface StepConfirmProps {
   direction: number;
   onConfirm: (data: { name: string; website: string; colors: string[]; locations: LocationItem[] }) => void;
   /** When true, the standalone bottom progress bar is not rendered (caller will render its own). */
+  /** When true, render as a fragment (no outer scroll wrapper); shell parent provides it. */
   hideProgressBar?: boolean;
-  progressVariant?: ProgressBarVariant;
-  progressCurrent?: number;
 }
 
-export function StepConfirm({ direction, onConfirm, hideProgressBar = false, progressVariant, progressCurrent = 1 }: StepConfirmProps) {
+export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: StepConfirmProps) {
   const { state, dispatch, brandColorMap } = useOnboarding();
   const { business, locations: contextLocations } = state;
 
@@ -259,6 +257,18 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false, pro
       setColors(business.brandColors.slice(0, MAX_COLORS));
     }
   }, [business?.brandColors]);
+
+  // Live-sync local color edits to global business state so the mockup and
+  // other downstream consumers always reflect the user's picks, even if they
+  // navigate away without pressing the confirm button.
+  const firstColorSyncRef = useRef(true);
+  useEffect(() => {
+    if (firstColorSyncRef.current) {
+      firstColorSyncRef.current = false;
+      return;
+    }
+    dispatch({ type: 'UPDATE_BUSINESS', payload: { brandColors: colors } });
+  }, [colors, dispatch]);
 
   // Live brand fetch when user enters a website domain
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -330,7 +340,7 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false, pro
   }, []);
 
   return (
-    <>
+    <div className={hideProgressBar ? 'contents' : 'w-full h-full overflow-y-auto flex items-start justify-center py-12'}>
     <motion.div
       className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8"
       custom={direction}
@@ -344,15 +354,17 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false, pro
         className="mb-6 flex items-center justify-center"
         variants={popVariants}
       >
-        {business?.logoUrl ? (
-          <img
-            src={business.logoUrl}
-            alt={business.name}
-            className="max-h-16 max-w-[200px] object-contain"
-          />
+        {business?.logoUrl || business?.favicon ? (
+          <div className="size-20 rounded-2xl bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] flex items-center justify-center overflow-hidden">
+            <img
+              src={(business.logoUrl ?? business.favicon)!}
+              alt={business.name}
+              className="max-w-full max-h-full object-contain p-2"
+            />
+          </div>
         ) : (
           <div
-            className="size-16 rounded-2xl flex items-center justify-center text-2xl font-bold border-2 border-gray-200/80"
+            className="size-20 rounded-2xl flex items-center justify-center text-2xl font-bold border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]"
             style={{ backgroundColor: brandColorMap.primaryColor, color: brandColorMap.primaryTextColor }}
           >
             {(business?.name ?? 'A').charAt(0)}
@@ -399,10 +411,11 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false, pro
         <motion.div variants={childVariants}>
           <label className="block text-[13px] text-gray-500 mb-1.5 ml-1">Brand colors</label>
           <div className="flex items-center gap-3">
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
               {colors.map((color, i) => (
                 <motion.div
                   key={i}
+                  layout
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.5 }}
@@ -416,20 +429,23 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false, pro
                   />
                 </motion.div>
               ))}
-            </AnimatePresence>
 
-            {colors.length < MAX_COLORS && (
-              <motion.button
-                type="button"
-                onClick={handleAddColor}
-                className="size-11 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-              >
-                <Plus className="size-4" />
-              </motion.button>
-            )}
+              {colors.length < MAX_COLORS && (
+                <motion.button
+                  key="add-color"
+                  type="button"
+                  layout
+                  onClick={handleAddColor}
+                  className="size-11 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                >
+                  <Plus className="size-4" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
         </motion.div>
 
@@ -503,11 +519,6 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false, pro
 
       <div className="pt-16" />
     </motion.div>
-    {!hideProgressBar && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-8 max-w-xl">
-        <ProgressBar current={progressCurrent} variant={progressVariant} />
-      </div>
-    )}
-    </>
+    </div>
   );
 }
