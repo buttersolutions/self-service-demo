@@ -72,9 +72,10 @@ function ColorSwatch({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="absolute -top-1 -right-1 size-4 rounded-full bg-gray-800 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -top-1 -right-1 size-5 md:size-4 rounded-full bg-gray-800 text-white flex items-center justify-center shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            aria-label="Remove color"
           >
-            <X className="size-2.5" />
+            <X className="size-3 md:size-2.5" />
           </button>
         )}
       </div>
@@ -368,7 +369,7 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
           if (!logo.src) {
             return (
               <div
-                className="size-20 rounded-[30px] flex items-center justify-center text-2xl font-bold border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]"
+                className="size-14 md:size-20 rounded-[14px] md:rounded-[20px] flex items-center justify-center text-2xl font-bold border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]"
                 style={{ backgroundColor: brandColorMap.primaryColor, color: brandColorMap.primaryTextColor }}
               >
                 {(business?.name ?? 'A').charAt(0)}
@@ -378,7 +379,7 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
           if (logo.isSquareFallback) {
             // logo.dev: curated 128px square asset — fill the frame edge-to-edge
             return (
-              <div className="size-20 rounded-[30px] bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden">
+              <div className="size-14 md:size-20 rounded-[14px] md:rounded-[20px] bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden">
                 <img
                   src={logo.src}
                   alt={business?.name ?? ''}
@@ -389,11 +390,11 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
           }
           // Firecrawl logo (detected dark): render natively with height cap for wordmarks
           return (
-            <div className="h-20 min-w-20 px-3 rounded-[30px] border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] flex items-center justify-center overflow-hidden bg-white">
+            <div className="h-14 md:h-20 min-w-14 md:min-w-20 px-2 md:px-3 rounded-[14px] md:rounded-[20px] border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] flex items-center justify-center overflow-hidden bg-white">
               <img
                 src={logo.src}
                 alt={business?.name ?? ''}
-                className="max-h-full w-auto max-w-[220px] object-contain py-3"
+                className="max-h-full w-auto max-w-[160px] md:max-w-[220px] object-contain py-2 md:py-3"
               />
             </div>
           );
@@ -531,8 +532,8 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
         </motion.div>
       </div>
 
-      {/* CTA */}
-      <motion.div className="w-full mt-6" variants={childVariants}>
+      {/* CTA — inline on desktop */}
+      <motion.div className="w-full mt-6 hidden md:block" variants={childVariants}>
         <OnboardingButton active={valid} disabled={!valid || buttonLoading} onClick={handleConfirm}>
           {buttonLoading ? (
             <span className="flex items-center justify-center gap-2">
@@ -545,8 +546,33 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
         </OnboardingButton>
       </motion.div>
 
-      <div className="pt-16" />
+      {/* Bottom spacer — larger on mobile so the fixed CTA doesn't cover content */}
+      <div className="pt-16 md:pt-16 pb-28 md:pb-0" />
     </motion.div>
+
+    {/* CTA — fixed at bottom on mobile with blur/gradient overlay */}
+    {!hideProgressBar && (
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
+        <div
+          className="pointer-events-auto px-4 pb-6 pt-10"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 55%, rgba(255,255,255,0) 100%)',
+          }}
+        >
+          <OnboardingButton active={valid} disabled={!valid || buttonLoading} onClick={handleConfirm}>
+            {buttonLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                Preparing...
+              </span>
+            ) : (
+              'Get my branded app'
+            )}
+          </OnboardingButton>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

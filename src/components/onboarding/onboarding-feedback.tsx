@@ -590,7 +590,6 @@ function OnboardingFeedbackInner() {
             initialPlace={selectedPlace}
             onSubmit={handleSearchSubmit}
             loading={loading}
-            progressVariant="feedback"
           />
         )}
 

@@ -630,7 +630,7 @@ function OnboardingInner() {
               key="rocket"
               src="/ag-rocket.svg"
               alt=""
-              className="fixed bottom-6 left-6 pointer-events-none select-none"
+              className="fixed bottom-4 left-4 md:bottom-6 md:left-6 w-14 md:w-auto pointer-events-none select-none"
               animate={floatRocket}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
@@ -639,7 +639,7 @@ function OnboardingInner() {
               key="pineapple"
               src="/ag-pineapple.svg"
               alt=""
-              className="fixed top-12 right-12 pointer-events-none select-none"
+              className="fixed top-4 right-4 md:top-12 md:right-12 w-8 md:w-auto pointer-events-none select-none"
               animate={floatPineapple}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}

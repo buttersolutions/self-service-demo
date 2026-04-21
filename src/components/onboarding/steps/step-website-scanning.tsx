@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Globe, Palette, Loader2 } from 'lucide-react';
 import { TypewriterSearch } from '../ui/typewriter-search';
 import { useOnboarding } from '@/lib/demo-flow-context';
+import { resolveLogo } from '@/lib/safe-logo';
 
 const MIN_DURATION_MS = 1500;
 const SHOW_RESULT_MS = 1000;
@@ -30,6 +31,7 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
   const screenshot = business?.screenshot ?? null;
   const ogImage = business?.ogImage ?? null;
   const logoUrl = business?.logoUrl ?? null;
+  const logo = resolveLogo(business);
 
   const heroImage = isInstagram
     ? logoUrl
@@ -276,12 +278,22 @@ export function StepWebsiteScanning({ onComplete }: StepWebsiteScanningProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.3 }}
           >
-            {business.logoUrl && (
-              <img
-                src={business.logoUrl}
-                alt={businessName}
-                className="size-10 rounded-lg border border-gray-200 object-cover"
-              />
+            {logo.src && (
+              logo.isSquareFallback ? (
+                <div className="size-10 rounded-lg border border-gray-200 bg-white overflow-hidden shrink-0">
+                  <img
+                    src={logo.src}
+                    alt={businessName}
+                    className="w-full h-full object-cover scale-[0.99]"
+                  />
+                </div>
+              ) : (
+                <img
+                  src={logo.src}
+                  alt={businessName}
+                  className="h-10 w-auto max-w-[180px] object-contain"
+                />
+              )
             )}
             <div className="flex items-center gap-2">
               {business.brandColors.slice(0, 4).map((color, i) => (

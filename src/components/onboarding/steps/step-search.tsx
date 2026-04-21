@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search } from 'lucide-react';
-import { OnboardingInput, OnboardingButton, ProgressBar } from '../ui';
-import type { ProgressBarVariant } from '../ui/progress-bar';
+import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import type { PlaceSummary } from '@/lib/types';
 
@@ -13,10 +12,9 @@ interface StepSearchProps {
   initialPlace?: PlaceSummary | null;
   onSubmit: (place: PlaceSummary) => void;
   loading: boolean;
-  progressVariant?: ProgressBarVariant;
 }
 
-export function StepSearch({ direction, initialPlace, onSubmit, loading, progressVariant }: StepSearchProps) {
+export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepSearchProps) {
   const [selectedPlace, setSelectedPlace] = useState<PlaceSummary | null>(initialPlace ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -147,9 +145,6 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading, progres
       </motion.div>
 
     </motion.div>
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-full px-8 max-w-xl">
-      <ProgressBar current={0} variant={progressVariant} />
-    </div>
     </>
   );
 }

@@ -134,7 +134,10 @@ export function GatheringPhotos({
 
   return (
     <div className="w-full h-full flex items-center justify-center overflow-hidden">
-      <div className="relative" style={{ width: 1100, height: 650 }}>
+      <div
+        className="relative scale-[0.3] sm:scale-[0.55] md:scale-100"
+        style={{ width: 1100, height: 650 }}
+      >
         <AnimatePresence>
           {displayPhotos.map((photo, i) => {
             if (i >= visiblePhotos) return null;

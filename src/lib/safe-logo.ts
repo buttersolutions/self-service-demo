@@ -23,6 +23,14 @@ export interface ResolvedLogo {
  * consistent catalog asset.
  */
 export function resolveLogo(business: BusinessData | null | undefined): ResolvedLogo {
+  // After handleConfirm locks in the chosen logo it writes it into `logoUrl`.
+  // If that chosen URL is the logo.dev asset, preserve the square signal —
+  // otherwise subsequent resolver calls would forget it and we'd render the
+  // square catalog tile as if it were a wordmark.
+  if (business?.logoUrl && business.logoDevUrl && business.logoUrl === business.logoDevUrl) {
+    return { src: business.logoUrl, isSquareFallback: true };
+  }
+
   if (business?.logoUrl && business.logoIsLight !== true) {
     return { src: business.logoUrl, isSquareFallback: false };
   }
