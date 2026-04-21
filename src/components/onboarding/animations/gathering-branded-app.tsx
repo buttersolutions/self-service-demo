@@ -984,8 +984,9 @@ export function GatheringBrandedApp({
                 );
               })()}
 
+              {/* Desktop heading only — mobile has its own heading inside the card below */}
               <motion.h3
-                className="text-[22px] leading-tight md:text-3xl md:leading-normal sm:text-2xl font-semibold text-gray-900 font-serif mb-7 md:mb-12 shrink-0 text-center px-4 md:px-2 -mt-6 md:mt-0 max-w-sm md:max-w-none relative z-30"
+                className="hidden md:block md:text-3xl md:leading-normal sm:text-2xl font-semibold text-gray-900 font-serif md:mb-12 shrink-0 text-center md:px-2 md:mt-0 md:max-w-none"
                 initial={{ opacity: 0, y: 16 }}
                 animate={isActive ? { opacity: 1, y: 0 } : {}}
                 transition={{ delay: 0.2, duration: 0.5 }}
@@ -993,28 +994,38 @@ export function GatheringBrandedApp({
                 Get your branded app now
               </motion.h3>
 
-              {/* Mobile checklist — visible only on mobile */}
-              <div className="md:hidden w-full max-w-sm px-2 mb-6 flex flex-col items-start gap-3">
-                {CHECKLIST_ITEMS.map((item, i) => (
-                  <motion.div
-                    key={i}
-                    className="flex items-start gap-2.5"
-                    initial={{ opacity: 0, x: -16 }}
-                    animate={isActive ? { opacity: 1, x: 0 } : {}}
-                    transition={{ delay: 0.5 + i * 0.1, duration: 0.35 }}
-                  >
+              {/* Mobile heading + checklist wrapped in a card, heading left-aligned */}
+              <motion.div
+                className="md:hidden w-full max-w-sm mb-6 rounded-2xl bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] p-5 flex flex-col gap-4 relative z-30 -mt-6"
+                initial={{ opacity: 0, y: 16 }}
+                animate={isActive ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.2, duration: 0.5 }}
+              >
+                <h3 className="text-[19px] leading-tight font-semibold text-gray-900 font-serif text-left">
+                  Get your branded app now
+                </h3>
+                <div className="flex flex-col items-start gap-3">
+                  {CHECKLIST_ITEMS.map((item, i) => (
                     <motion.div
-                      initial={{ scale: 0 }}
-                      animate={isActive ? { scale: 1 } : {}}
-                      transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 0.5 + i * 0.1 }}
-                      className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                      key={i}
+                      className="flex items-start gap-2.5"
+                      initial={{ opacity: 0, x: -16 }}
+                      animate={isActive ? { opacity: 1, x: 0 } : {}}
+                      transition={{ delay: 0.5 + i * 0.1, duration: 0.35 }}
                     >
-                      <Check className="size-2.5 text-white" strokeWidth={3} />
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={isActive ? { scale: 1 } : {}}
+                        transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 0.5 + i * 0.1 }}
+                        className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                      >
+                        <Check className="size-2.5 text-white" strokeWidth={3} />
+                      </motion.div>
+                      <span className="text-[13px] font-medium text-gray-900 leading-snug">{item}</span>
                     </motion.div>
-                    <span className="text-[13px] font-medium text-gray-900 leading-snug">{item}</span>
-                  </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </motion.div>
               <div className="hidden md:block" style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
                 <div
                   className="relative"
