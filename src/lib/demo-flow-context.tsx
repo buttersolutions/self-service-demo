@@ -37,6 +37,7 @@ export interface PipelineStage {
 export interface OnboardingState {
   step: Step;
   loading: boolean;
+  skippedSearch: boolean;
   selectedPlace: PlaceSummary | null;
   business: BusinessData | null;
   locations: LocationItem[];
@@ -64,6 +65,7 @@ const initialGatheringData: GatheringData = {
 const initialState: OnboardingState = {
   step: "search",
   loading: false,
+  skippedSearch: false,
   selectedPlace: null,
   business: null,
   locations: [],
@@ -100,6 +102,7 @@ export type OnboardingAction =
   | { type: "INIT_PIPELINE_STAGES"; payload: PipelineStage[] }
   | { type: "UPDATE_PIPELINE_STAGE"; payload: { id: string; status: PipelineStageStatus; label?: string } }
   | { type: "SET_REPORT_ID"; payload: string }
+  | { type: "SET_SKIPPED_SEARCH"; payload: boolean }
   | { type: "RESET" };
 
 /* ── Reducer ────────────────────────────────────────────────────────── */
@@ -213,6 +216,8 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
         },
       };
     }
+    case "SET_SKIPPED_SEARCH":
+      return { ...state, skippedSearch: action.payload };
     case "SET_REVIEW_ANALYSIS_FALLBACK":
       if (state.gatheringData.reviewAnalysis !== null) return state;
       return {

@@ -137,7 +137,7 @@ export async function getPlaceDetails(
 ): Promise<PlaceDetails> {
   const data = await placesRequest(
     `/places/${placeId}`,
-    "id,displayName,formattedAddress,websiteUri,location,rating,userRatingCount,reviews,photos"
+    "id,displayName,formattedAddress,websiteUri,location,rating,userRatingCount,reviews,photos,addressComponents"
   );
 
   return {

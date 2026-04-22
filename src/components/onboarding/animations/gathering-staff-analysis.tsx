@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence, type Transition } from 'framer-motion';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence, useMotionValue, type Transition } from 'framer-motion';
 import type { ReviewInsight, ReviewAnalysis } from '@/lib/types';
 import type { ReviewItem, ReviewProgressEvent } from '../types';
 import { SquaresBackground } from './squares-background';
@@ -193,24 +193,62 @@ function AnalysisResults({
   analysis,
   mentions,
   sortedBreakdown,
-  onScrollStart,
+  containerRef,
   onComplete,
 }: {
   analysis: ReviewAnalysis;
   mentions: ReviewInsight[];
   sortedBreakdown: ReviewAnalysis['categoryBreakdown'];
-  onScrollStart: () => void;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   onComplete?: () => void;
 }) {
   const strengthsText = `Customers love ${analysis.strengths.slice(0, 3).map((s) => s.toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' and $1')}. These are your strongest areas.`;
   const areasIntroText = 'However, we found areas that need attention:';
 
-  // Steps: 0=headline, 1=strengths, 2=areasIntro, 3=1st section (immediate),
-  //         4=start scroll + wait 3.5s, 5=2nd section + wait 3.5s, 6=3rd section, ..., last=summary
   const [step, setStep] = useState(0);
   const sectionCount = sortedBreakdown.length;
   const firstSectionStep = 3;
   const summaryStep = firstSectionStep + sectionCount;
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const motionY = useMotionValue(0);
+  const rafRef = useRef<number | null>(null);
+  const scrollYRef = useRef(0);
+  const lastTimeRef = useRef(0);
+
+  // Continuous smooth scroll via RAF — no stops, no jumps
+  const SCROLL_SPEED = 40; // px per second
+
+  useEffect(() => {
+    const tick = (time: number) => {
+      if (!contentRef.current || !containerRef.current) {
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      if (lastTimeRef.current === 0) lastTimeRef.current = time;
+      const delta = (time - lastTimeRef.current) / 1000;
+      lastTimeRef.current = time;
+
+      const contentHeight = contentRef.current.offsetHeight;
+      const containerHeight = containerRef.current.clientHeight;
+      const maxScroll = Math.max(0, contentHeight - containerHeight);
+
+      if (scrollYRef.current < maxScroll) {
+        scrollYRef.current = Math.min(scrollYRef.current + SCROLL_SPEED * delta, maxScroll);
+        motionY.set(-scrollYRef.current);
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      lastTimeRef.current = 0;
+    };
+  }, [containerRef, motionY]);
 
   // 0 → 1: headline done
   const onHeadlineDone = useCallback(() => setStep(1), []);
@@ -219,45 +257,55 @@ function AnalysisResults({
   // 2 → 3: areas intro done → show 1st section immediately
   const onAreasIntroDone = useCallback(() => setStep(3), []);
 
-  // 3: 1st section visible → wait for cards to land (~4s), start scroll, then show next section
+  // Skip strengths step if no strengths data
+  useEffect(() => {
+    if (step === 1 && analysis.strengths.length === 0) setStep(2);
+  }, [step, analysis.strengths.length]);
+
+  // Skip areas intro step if no negative breakdown categories
+  useEffect(() => {
+    if (step === 2 && sortedBreakdown.length === 0) setStep(summaryStep);
+  }, [step, sortedBreakdown.length, summaryStep]);
+
+  // 3: 1st section visible → reveal next as scroll nears the end of this section
   useEffect(() => {
     if (step !== firstSectionStep) return;
-    // Start scroll after all 3 cards in first section have landed (3 * 1200ms + buffer)
-    const scrollTimer = setTimeout(() => onScrollStart(), 4000);
-    // Show next section 3.5s after scroll starts
-    const nextTimer = setTimeout(() => setStep((s) => s + 1), 7500);
-    return () => { clearTimeout(scrollTimer); clearTimeout(nextTimer); };
-  }, [step, onScrollStart]);
-
-  // 4+: each subsequent section waits 3.5s then shows next
-  useEffect(() => {
-    if (step <= firstSectionStep || step >= firstSectionStep + sectionCount) return;
-    const t = setTimeout(() => setStep((s) => s + 1), 3500);
+    if (sectionCount === 0) return;
+    const t = setTimeout(() => setStep((s) => s + 1), 5000);
     return () => clearTimeout(t);
   }, [step, sectionCount]);
 
-  // After all sections shown, wait 2s then show summary
+  // 4+: each subsequent section
+  useEffect(() => {
+    if (step <= firstSectionStep || step >= firstSectionStep + sectionCount) return;
+    const t = setTimeout(() => setStep((s) => s + 1), 4000);
+    return () => clearTimeout(t);
+  }, [step, sectionCount]);
+
+  // After all sections shown, show summary
   useEffect(() => {
     if (step !== firstSectionStep + sectionCount) return;
-    const t = setTimeout(() => setStep(summaryStep), 2000);
+    const t = setTimeout(() => setStep(summaryStep), 4000);
     return () => clearTimeout(t);
   }, [step, sectionCount, summaryStep]);
 
-  // Auto-navigate to last step 8s after summary is shown
+  // Auto-complete after summary has been visible
   useEffect(() => {
     if (step !== summaryStep) return;
-    const t = setTimeout(() => onComplete?.(), 8000);
+    const t = setTimeout(() => onComplete?.(), 12000);
     return () => clearTimeout(t);
   }, [step, summaryStep, onComplete]);
 
-  const visibleSections = Math.max(0, step - firstSectionStep + 1); // 1 at step 3, 2 at step 4, etc.
+  const visibleSections = Math.max(0, step - firstSectionStep + 1);
 
   return (
     <motion.div
+      ref={contentRef}
+      style={{ y: motionY }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.6 }}
-      className="relative z-10 px-12 pt-24 pb-[50vh]"
+      className="relative z-10 px-12 pt-24 pb-8"
     >
       {/* 1. Headline */}
       <div className="mb-8">
@@ -306,7 +354,7 @@ function AnalysisResults({
             />
           </motion.div>
 
-          {/* 5-7. Review sections — revealed one by one */}
+          {/* Review sections — revealed one by one */}
           <div className="space-y-14">
             {sortedBreakdown.map((breakdown, i) => {
               if (i >= visibleSections) return null;
@@ -354,7 +402,7 @@ function AnalysisResults({
         </div>
       )}
 
-      {/* 8. Closing summary — after all sections shown */}
+      {/* Closing summary — after all sections shown */}
       {step >= summaryStep && analysis.body && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -384,35 +432,8 @@ const MODULE_DOT_COLORS: Record<string, string> = {
 // ── Main component ──────────────────────────────────────────────────
 
 export function GatheringStaffAnalysis({ mentions, analysis, onComplete }: GatheringStaffAnalysisProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollingRef = useRef(false);
-  const rafRef = useRef<number | null>(null);
-
+  const containerRef = useRef<HTMLDivElement>(null);
   const isDataReady = analysis !== null;
-
-  // Called by AnalysisResults when it's time to start scrolling
-  const startScroll = useCallback(() => {
-    if (scrollingRef.current) return;
-    scrollingRef.current = true;
-    const scroll = () => {
-      if (!scrollingRef.current || !scrollRef.current) return;
-      const s = scrollRef.current;
-      // Only scroll if there's content below the fold
-      if (s.scrollTop + s.clientHeight < s.scrollHeight - 2) {
-        s.scrollTop += 0.2;
-      }
-      // Keep the loop running — new content will appear over time
-      rafRef.current = requestAnimationFrame(scroll);
-    };
-    rafRef.current = requestAnimationFrame(scroll);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      scrollingRef.current = false;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
 
   const isEmpty = isDataReady && mentions.length === 0 && !analysis.headline;
   const sortedBreakdown = analysis?.categoryBreakdown
@@ -421,10 +442,7 @@ export function GatheringStaffAnalysis({ mentions, analysis, onComplete }: Gathe
     .slice(0, 3) ?? [];
 
   return (
-    <div
-      ref={scrollRef}
-      className="w-full h-full overflow-y-auto overflow-x-hidden relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-    >
+    <div ref={containerRef} className="w-full h-full overflow-hidden relative">
       {/* Loading — waiting for analysis data */}
       <AnimatePresence>
         {!isDataReady && (
@@ -483,7 +501,7 @@ export function GatheringStaffAnalysis({ mentions, analysis, onComplete }: Gathe
             analysis={analysis}
             mentions={mentions}
             sortedBreakdown={sortedBreakdown}
-            onScrollStart={startScroll}
+            containerRef={containerRef}
             onComplete={onComplete}
           />
         )}
