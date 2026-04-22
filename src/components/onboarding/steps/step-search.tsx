@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search } from 'lucide-react';
-import { OnboardingInput, OnboardingButton, PaginationDots } from '../ui';
+import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import type { PlaceSummary } from '@/lib/types';
 
@@ -26,12 +26,17 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
     const place = ac.getPlace();
     if (!place.place_id || !place.geometry?.location) return;
 
+    const countryComponent = place.address_components?.find((c) =>
+      c.types.includes('country'),
+    );
+
     const summary: PlaceSummary = {
       placeId: place.place_id,
       displayName: place.name ?? '',
       formattedAddress: place.formatted_address ?? '',
       websiteUri: place.website,
       types: place.types,
+      countryCode: countryComponent?.short_name?.toLowerCase(),
       location: {
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
@@ -56,6 +61,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
           'website',
           'geometry.location',
           'types',
+          'address_components',
         ],
       });
 
@@ -95,6 +101,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
   };
 
   return (
+    <>
     <motion.div
       className="flex flex-col items-center w-full max-w-[640px] mx-auto px-8"
       custom={direction}
@@ -137,12 +144,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
         </OnboardingButton>
       </motion.div>
 
-      <motion.div
-        className="mt-auto pt-16 flex flex-col items-center gap-6"
-        variants={childVariants}
-      >
-        <PaginationDots total={3} current={0} />
-      </motion.div>
     </motion.div>
+    </>
   );
 }

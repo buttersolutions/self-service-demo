@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { OnboardingButton, OnboardingInput } from '../ui';
 import { useOnboarding } from '@/lib/demo-flow-context';
+import { resolveLogo } from '@/lib/safe-logo';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
 import type { LocationItem } from '../types';
 import type { PlacePhoto } from '@/lib/types';
@@ -18,6 +19,7 @@ import type { PlacePhoto } from '@/lib/types';
 interface GatheringBrandedAppProps {
   businessName: string;
   logoUrl: string | null;
+  favicon: string | null;
   locations: LocationItem[];
   photos: PlacePhoto[];
   isActive: boolean;
@@ -87,12 +89,15 @@ const fadeUp = { initial: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }
 function FeedReplica({
   businessName,
   logoUrl,
+  logoIsSquare,
   primaryColor,
   photos,
   animate,
 }: {
   businessName: string;
   logoUrl: string | null;
+  /** When true, logoUrl is a logo.dev square asset — render in a fixed square frame. */
+  logoIsSquare: boolean;
   primaryColor: string;
   photos: PlacePhoto[];
   animate: boolean;
@@ -110,12 +115,24 @@ function FeedReplica({
         animate={animate ? fadeUp.visible : fadeUp.initial}
         transition={stagger(0.3, 0)}
       >
-        {/* Logo */}
+        {/* Logo. logo.dev fallback renders as a fixed square; the native
+            Firecrawl logo renders wordmark-style with a height cap. */}
         <div className="flex items-center w-[200px]">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-8 object-contain rounded-lg" />
+            logoIsSquare ? (
+              <div className="size-12 rounded-md bg-white border border-gray-200/80 overflow-hidden">
+                <img src={logoUrl} alt="" className="w-full h-full object-cover scale-[0.99]" />
+              </div>
+            ) : (
+              <img src={logoUrl} alt="" className="h-10 w-auto max-w-[180px] object-contain" />
+            )
           ) : (
-            <div className="h-8 w-24 rounded-md" style={{ backgroundColor: primaryColor }} />
+            <div
+              className="size-12 rounded-xl flex items-center justify-center text-white text-lg font-bold"
+              style={{ backgroundColor: primaryColor }}
+            >
+              {businessName.charAt(0).toUpperCase() || 'A'}
+            </div>
           )}
         </div>
 
@@ -473,6 +490,7 @@ const FEED_THUMBS = [
 function MobileFeedReplica({
   businessName,
   logoUrl,
+  logoIsSquare,
   primaryColor,
   headerColor,
   photos,
@@ -480,6 +498,8 @@ function MobileFeedReplica({
 }: {
   businessName: string;
   logoUrl: string | null;
+  /** When true, logoUrl is a logo.dev square asset — render in a fixed square frame. */
+  logoIsSquare: boolean;
   primaryColor: string;
   headerColor: string;
   photos: PlacePhoto[];
@@ -489,7 +509,7 @@ function MobileFeedReplica({
   const storyPhoto2 = photos[4] ? `/api/places/photo?name=${encodeURIComponent(photos[4].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&h=400&fit=crop';
   const storyPhoto3 = photos[5] ? `/api/places/photo?name=${encodeURIComponent(photos[5].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=400&fit=crop';
   const postPhoto = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
-
+  console.log("Logo is square:", logoIsSquare)
   return (
     <div className="relative w-[390px] h-[870px] bg-white flex flex-col overflow-hidden" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* ── Status bar + Header (single block, no gap) ─────── */}
@@ -503,6 +523,7 @@ function MobileFeedReplica({
           borderRadius: '0 0 24px 24px',
         }}
       >
+       
         {/* Status bar */}
         <div className="flex items-center justify-between px-1 pt-3 pb-3">
           <span className="text-[15px] font-semibold text-white">9:41</span>
@@ -514,9 +535,20 @@ function MobileFeedReplica({
         </div>
         <div className="flex items-center justify-between">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-11 object-contain rounded-lg" />
+            logoIsSquare ? (
+              <div className="size-13 rounded-md bg-white overflow-hidden shrink-0">
+                <img src={logoUrl} alt="" className="w-full h-full object-cover scale-[0.99]" />
+              </div>
+            ) : (
+              <img src={logoUrl} alt="" className="h-12 w-auto max-w-[200px] object-contain" />
+            )
           ) : (
-            <span className="text-[26px] font-black text-white">{businessName}</span>
+            <div
+              className="size-13 rounded-xl flex items-center justify-center text-white text-2xl font-bold shrink-0"
+              style={{ backgroundColor: primaryColor }}
+            >
+              {businessName.charAt(0).toUpperCase() || 'A'}
+            </div>
           )}
           <div className="flex items-center">
             <div className="size-10 flex items-center justify-center">
@@ -715,13 +747,17 @@ const CHECKLIST_ITEMS = [
 export function GatheringBrandedApp({
   businessName,
   logoUrl,
+  favicon,
   locations,
   photos,
   isActive,
 }: GatheringBrandedAppProps) {
-  const { brandColorMap } = useOnboarding();
+  const { brandColorMap, state } = useOnboarding();
   const primaryColor = brandColorMap.primaryColor;
   const darkestBrandColor = primaryColor;
+  // Logo resolution: src + whether to wrap in a colored pill (for near-white
+  // logos) with wrapColor being the CTA button color (strongest brand signal).
+  const logo = resolveLogo(state.business);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -786,6 +822,11 @@ export function GatheringBrandedApp({
   const fullscreenScale = outerSize.width > 0
     ? Math.max(outerSize.width / FEED_W, outerSize.height / FEED_H)
     : 1;
+  const MOBILE_FEED_W = 390;
+  const MOBILE_FEED_H = 870;
+  const mobileFullscreenScale = outerSize.width > 0
+    ? Math.max(outerSize.width / MOBILE_FEED_W, outerSize.height / MOBILE_FEED_H)
+    : 1;
 
   return (
     <div className="w-full h-full relative overflow-hidden" ref={outerMeasuredRef}>
@@ -795,16 +836,16 @@ export function GatheringBrandedApp({
         animate={expanded ? { opacity: 0, pointerEvents: 'none' as const } : { opacity: 1, pointerEvents: 'auto' as const }}
         transition={{ duration: 0.1 }}
       >
-        <div className="w-full h-full p-4 bg-[#625CE4]">
+        <div className="w-full h-full p-2 sm:p-4 bg-[#625CE4]">
           <motion.div
-            className="w-full h-full flex rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
+            className="w-full h-full flex flex-col md:flex-row rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
             initial={{ opacity: 0 }}
             animate={isActive ? { opacity: 1 } : {}}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
-            {/* Left sidebar */}
+            {/* Left sidebar — hidden on mobile */}
             <motion.div
-              className="w-80 shrink-0 flex flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
+              className="hidden md:flex w-80 shrink-0 flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
               initial={{ opacity: 0, x: -40 }}
               animate={isActive ? { opacity: 1, x: 0 } : {}}
               transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -852,16 +893,140 @@ export function GatheringBrandedApp({
             </motion.div>
 
             {/* Right side — mockups with overlay button */}
-            <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-6 pt-12">
+            <div ref={mockupAreaRef} className="flex-1 relative min-w-0 flex flex-col items-center px-4 sm:px-6 pt-0 sm:pt-12 md:pt-12 overflow-hidden">
+              {/* ── Mobile-only: scaled-down full mockup preview at the top ── */}
+              {(() => {
+                const MOBILE_MOCKUP_SCALE = 0.32;
+                const scaledW = MOCKUP_W * MOBILE_MOCKUP_SCALE;
+                const scaledH = MOCKUP_H * MOBILE_MOCKUP_SCALE;
+                return (
+                  <motion.div
+                    className="md:hidden relative w-full shrink-0 flex justify-center pt-12 overflow-hidden"
+                    style={{ height: scaledH + 96 }}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={isActive ? { opacity: 1, y: 0 } : {}}
+                    transition={{ delay: 0.3, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <div style={{ width: scaledW, height: scaledH, position: 'relative' }}>
+                      <div
+                        style={{
+                          width: MOCKUP_W,
+                          height: MOCKUP_H,
+                          transform: `scale(${MOBILE_MOCKUP_SCALE})`,
+                          transformOrigin: 'top left',
+                          position: 'relative',
+                        }}
+                      >
+                        {/* App icon */}
+                        <div className="absolute z-10" style={{ left: 0, bottom: 80 }}>
+                          <div
+                            className="flex items-center justify-center overflow-hidden"
+                            style={{
+                              width: 64,
+                              height: 64,
+                              borderRadius: 14,
+                              backgroundColor: logo.isSquareFallback ? '#ffffff' : primaryColor,
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
+                              transform: 'rotate(-6deg)',
+                            }}
+                          >
+                            {logo.src ? (
+                              <img
+                                src={logo.src}
+                                alt=""
+                                className={`w-full h-full ${logo.isSquareFallback ? 'object-cover scale-[0.99]' : 'object-contain p-1'}`}
+                              />
+                            ) : (
+                              <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Laptop */}
+                        <div className="absolute bottom-0 left-0">
+                          <LaptopMockup>
+                            <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
+                              <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                            </div>
+                          </LaptopMockup>
+                        </div>
+
+                        {/* Phone */}
+                        <div className="absolute z-10" style={{ right: -20, bottom: -15, transform: 'rotate(3deg)' }}>
+                          <PhoneMockup>
+                            <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
+                              <MobileFeedReplica
+                                businessName={businessName}
+                                logoUrl={logo.src}
+                                logoIsSquare={logo.isSquareFallback}
+                                primaryColor={primaryColor}
+                                headerColor={darkestBrandColor}
+                                photos={photos}
+                                animate={isActive}
+                              />
+                            </div>
+                          </PhoneMockup>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom fade — matches the card's bg-white/95 surface
+                        (5% of #625CE4 bleeds through) so the mockup AND the
+                        phone's drop shadow dissolve into the surrounding bg */}
+                    <div
+                      className="absolute inset-x-0 bottom-0 h-36 pointer-events-none z-20"
+                      style={{
+                        background:
+                          'linear-gradient(to top, rgba(247,247,254,1) 0%, rgba(247,247,254,1) 35%, rgba(247,247,254,0) 100%)',
+                      }}
+                    />
+                  </motion.div>
+                );
+              })()}
+
+              {/* Desktop heading only — mobile has its own heading inside the card below */}
               <motion.h3
-                className="text-3xl font-semibold text-gray-900 font-serif mb-12 shrink-0"
+                className="hidden md:block md:text-3xl md:leading-normal sm:text-2xl font-semibold text-gray-900 font-serif md:mb-12 shrink-0 text-center md:px-2 md:mt-0 md:max-w-none"
                 initial={{ opacity: 0, y: 16 }}
                 animate={isActive ? { opacity: 1, y: 0 } : {}}
                 transition={{ delay: 0.2, duration: 0.5 }}
               >
-                Your branded app is ready
+                Get your branded app now
               </motion.h3>
-              <div style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
+
+              {/* Mobile heading + checklist wrapped in a card, heading left-aligned */}
+              <motion.div
+                className="md:hidden w-full max-w-sm mb-6 rounded-2xl bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] p-5 flex flex-col gap-4 relative z-30 -mt-6"
+                initial={{ opacity: 0, y: 16 }}
+                animate={isActive ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.2, duration: 0.5 }}
+              >
+                <h3 className="text-[19px] leading-tight font-semibold text-gray-900 font-serif text-left">
+                  Get your branded app now
+                </h3>
+                <div className="flex flex-col items-start gap-3">
+                  {CHECKLIST_ITEMS.map((item, i) => (
+                    <motion.div
+                      key={i}
+                      className="flex items-start gap-2.5"
+                      initial={{ opacity: 0, x: -16 }}
+                      animate={isActive ? { opacity: 1, x: 0 } : {}}
+                      transition={{ delay: 0.5 + i * 0.1, duration: 0.35 }}
+                    >
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={isActive ? { scale: 1 } : {}}
+                        transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 0.5 + i * 0.1 }}
+                        className="size-4 bg-[#625CE4] rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                      >
+                        <Check className="size-2.5 text-white" strokeWidth={3} />
+                      </motion.div>
+                      <span className="text-[13px] font-medium text-gray-900 leading-snug">{item}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+              <div className="hidden md:block" style={{ width: MOCKUP_W * mockupScale, height: MOCKUP_H * mockupScale }}>
                 <div
                   className="relative"
                   style={{
@@ -885,12 +1050,16 @@ export function GatheringBrandedApp({
                         width: 64,
                         height: 64,
                         borderRadius: 14,
-                        backgroundColor: primaryColor,
+                        backgroundColor: logo.isSquareFallback ? '#ffffff' : primaryColor,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.1)',
                       }}
                     >
-                      {logoUrl ? (
-                        <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+                      {logo.src ? (
+                        <img
+                          src={logo.src}
+                          alt=""
+                          className={`w-full h-full ${logo.isSquareFallback ? 'object-cover scale-[0.99]' : 'object-contain p-1'}`}
+                        />
                       ) : (
                         <span className="text-white text-2xl font-bold">{businessName.charAt(0)}</span>
                       )}
@@ -906,7 +1075,7 @@ export function GatheringBrandedApp({
                   >
                     <LaptopMockup>
                       <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                        <FeedReplica businessName={businessName} logoUrl={logoUrl} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                        <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} animate={isActive} />
                       </div>
                     </LaptopMockup>
                   </motion.div>
@@ -922,7 +1091,8 @@ export function GatheringBrandedApp({
                       <div style={{ width: 390, height: 870, transform: `scale(${PHONE_SCALE})`, transformOrigin: 'top left' }}>
                         <MobileFeedReplica
                           businessName={businessName}
-                          logoUrl={logoUrl}
+                          logoUrl={logo.src}
+                          logoIsSquare={logo.isSquareFallback}
                           primaryColor={primaryColor}
                           headerColor={darkestBrandColor}
                           photos={photos}
@@ -934,9 +1104,9 @@ export function GatheringBrandedApp({
                 </div>
               </div>
 
-              {/* Gradient overlay with header + button */}
+              {/* Desktop gradient overlay with button */}
               <motion.div
-                className="absolute bottom-0 left-0 right-0 z-20 flex items-end justify-center pb-8"
+                className="hidden md:flex absolute bottom-0 left-0 right-0 z-20 items-end justify-center pb-8"
                 style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)', height: 200 }}
                 initial={{ opacity: 0 }}
                 animate={isActive ? { opacity: 1 } : {}}
@@ -949,19 +1119,40 @@ export function GatheringBrandedApp({
                   Get started
                 </button>
               </motion.div>
+
+              {/* Mobile fixed CTA at bottom with blur/gradient overlay */}
+              <motion.div
+                className="md:hidden absolute bottom-0 left-0 right-0 z-20 flex justify-center pb-6 pt-10 px-4 pointer-events-none"
+                style={{
+                  background:
+                    'linear-gradient(to top, rgba(249,250,251,1) 0%, rgba(249,250,251,0.95) 55%, rgba(249,250,251,0) 100%)',
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={isActive ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 1.0, duration: 0.5 }}
+              >
+                <button
+                  onClick={handleGetStarted}
+                  className="pointer-events-auto w-full h-12 rounded-xl text-sm font-medium text-white bg-gradient-to-b from-[#6e69e8] to-[#625CE4] shadow-[0_4px_16px_rgba(98,92,228,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-[#7a76ec] hover:to-[#6e69e8] active:translate-y-[0.5px] transition-all cursor-pointer"
+                >
+                  Get started
+                </button>
+              </motion.div>
             </div>
           </motion.div>
         </div>
       </motion.div>
 
-      {/* ── Expanded view: fullscreen FeedReplica + dialog ── */}
+      {/* ── Expanded view: fullscreen FeedReplica (desktop) or phone mockup (mobile) + dialog ── */}
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: 0 }}
         animate={expanded ? { opacity: 1 } : { opacity: 0, pointerEvents: 'none' as const }}
         transition={{ duration: 0.1 }}
       >
+        {/* Desktop: fullscreen feed */}
         <div
+          className="hidden md:block"
           style={{
             width: FEED_W,
             height: FEED_H,
@@ -971,8 +1162,30 @@ export function GatheringBrandedApp({
         >
           <FeedReplica
             businessName={businessName}
-            logoUrl={logoUrl}
+            logoUrl={logo.src}
+            logoIsSquare={logo.isSquareFallback}
             primaryColor={primaryColor}
+            photos={photos}
+            animate={expanded}
+          />
+        </div>
+
+        {/* Mobile: bare mobile feed replica fullscreen behind dialog (no phone frame) */}
+        <div
+          className="md:hidden"
+          style={{
+            width: MOBILE_FEED_W,
+            height: MOBILE_FEED_H,
+            transform: `scale(${mobileFullscreenScale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <MobileFeedReplica
+            businessName={businessName}
+            logoUrl={logo.src}
+            logoIsSquare={logo.isSquareFallback}
+            primaryColor={primaryColor}
+            headerColor={darkestBrandColor}
             photos={photos}
             animate={expanded}
           />

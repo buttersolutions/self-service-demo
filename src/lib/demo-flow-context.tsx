@@ -3,12 +3,15 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useReducer,
   useMemo,
+  useRef,
   type ReactNode,
   type Dispatch,
 } from "react";
-import type { PlaceSummary, ReviewInsight, ReviewAnalysis } from "./types";
+import { analyzeLogoLuminance } from "./image-analysis";
+import type { PlaceSummary, ReviewInsight, ReviewAnalysis, GuestFeedbackReport } from "./types";
 import type {
   BusinessData,
   FeedPost,
@@ -23,6 +26,14 @@ import { deriveBrandColorMap, type BrandColorMap } from "./colors";
 
 /* ── State ──────────────────────────────────────────────────────────── */
 
+export type PipelineStageStatus = 'pending' | 'active' | 'done';
+
+export interface PipelineStage {
+  id: string;
+  label: string;
+  status: PipelineStageStatus;
+}
+
 export interface OnboardingState {
   step: Step;
   loading: boolean;
@@ -32,6 +43,9 @@ export interface OnboardingState {
   locations: LocationItem[];
   gatheringData: GatheringData;
   fetchTimings: Record<string, FetchTiming>;
+  chainDiscoveryDone: boolean;
+  pipelineStages: PipelineStage[];
+  reportId: string | null;
 }
 
 const initialGatheringData: GatheringData = {
@@ -44,6 +58,8 @@ const initialGatheringData: GatheringData = {
   reviewAnalysisPreview: null,
   reviewProgress: [],
   feedPosts: null,
+  guestFeedbackReport: null,
+  guestFeedbackReportPreview: null,
 };
 
 const initialState: OnboardingState = {
@@ -55,6 +71,9 @@ const initialState: OnboardingState = {
   locations: [],
   gatheringData: initialGatheringData,
   fetchTimings: {},
+  chainDiscoveryDone: false,
+  pipelineStages: [],
+  reportId: null,
 };
 
 /* ── Actions ────────────────────────────────────────────────────────── */
@@ -77,6 +96,12 @@ export type OnboardingAction =
   | { type: "TRACK_FETCH_END"; payload: { key: string; status: "done" | "error"; errorMessage?: string } }
   | { type: "TRACK_SSE_EVENT"; payload: { key: string; event: string } }
   | { type: "SET_REVIEW_ANALYSIS_FALLBACK"; payload: ReviewAnalysis }
+  | { type: "SET_GUEST_FEEDBACK_REPORT"; payload: GuestFeedbackReport }
+  | { type: "SET_GUEST_FEEDBACK_REPORT_PREVIEW"; payload: GuestFeedbackReport }
+  | { type: "SET_CHAIN_DISCOVERY_DONE" }
+  | { type: "INIT_PIPELINE_STAGES"; payload: PipelineStage[] }
+  | { type: "UPDATE_PIPELINE_STAGE"; payload: { id: string; status: PipelineStageStatus; label?: string } }
+  | { type: "SET_REPORT_ID"; payload: string }
   | { type: "SET_SKIPPED_SEARCH"; payload: boolean }
   | { type: "RESET" };
 
@@ -202,6 +227,31 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
           reviewAnalysis: { ...action.payload, insights: state.gatheringData.reviewInsights },
         },
       };
+    case "SET_GUEST_FEEDBACK_REPORT":
+      return {
+        ...state,
+        gatheringData: { ...state.gatheringData, guestFeedbackReport: action.payload },
+      };
+    case "SET_GUEST_FEEDBACK_REPORT_PREVIEW":
+      return {
+        ...state,
+        gatheringData: { ...state.gatheringData, guestFeedbackReportPreview: action.payload },
+      };
+    case "SET_CHAIN_DISCOVERY_DONE":
+      return { ...state, chainDiscoveryDone: true };
+    case "INIT_PIPELINE_STAGES":
+      return { ...state, pipelineStages: action.payload };
+    case "UPDATE_PIPELINE_STAGE":
+      return {
+        ...state,
+        pipelineStages: state.pipelineStages.map((s) =>
+          s.id === action.payload.id
+            ? { ...s, status: action.payload.status, label: action.payload.label ?? s.label }
+            : s
+        ),
+      };
+    case "SET_REPORT_ID":
+      return { ...state, reportId: action.payload };
     case "RESET":
       return initialState;
     default:
@@ -226,6 +276,31 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     () => deriveBrandColorMap(state.business?.brandColors ?? []),
     [state.business?.brandColors],
   );
+
+  // Analyse logo luminance so the renderer can decide whether to wrap it in
+  // a brand-color pill (near-white logos need the wrap). Fails silently on
+  // CORS — unknown state is optimistic (logoIsLight stays undefined → render
+  // the logo as-is).
+  const analyzedLogoUrlRef = useRef<string | null>(null);
+  const logoUrl = state.business?.logoUrl ?? null;
+
+  useEffect(() => {
+    if (!logoUrl) return;
+    if (analyzedLogoUrlRef.current === logoUrl) return;
+    analyzedLogoUrlRef.current = logoUrl;
+
+    let cancelled = false;
+    analyzeLogoLuminance(logoUrl)
+      .then((result) => {
+        if (cancelled || !result) return;
+        dispatch({ type: "UPDATE_BUSINESS", payload: { logoIsLight: result.isLight } });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [logoUrl]);
 
   const value = useMemo(
     () => ({ state, dispatch, brandColorMap }),

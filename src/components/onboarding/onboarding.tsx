@@ -4,22 +4,26 @@ import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { ChevronLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { AllgravyLogo } from '@/components/ui/allgravy-logo';
+import { OnboardingShell } from './ui/onboarding-shell';
 import loadingAnimation from '../../../public/animations/all-gravy-loading.json';
 
 const Lottie = dynamic(() => import('lottie-react'), { ssr: false });
 import {
   StepSearch,
-  StepConfirmBusiness,
-  StepConfirmLocations,
-  StepGathering,
+  StepMapScanning,
+  StepPhotosScanning,
+  StepWebsiteScanning,
+  StepWebsitePrompt,
+  StepConfirm,
+  StepMockup,
   StepDone,
 } from './steps';
-import type { FetchTiming, LocationItem, ReviewItem, Step } from './types';
-import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse, ReviewInsight, ReviewAnalysis } from '@/lib/types';
+import type { FetchTiming, LocationItem, Step } from './types';
+import type { PlaceSummary, TextSearchResponse, PlaceDetailsResponse } from '@/lib/types';
 import { OnboardingProvider, useOnboarding } from '@/lib/demo-flow-context';
+import { extractDomain, classifyWebsiteUri } from '@/lib/domain-utils';
+import { track } from '@/lib/tracking/track';
 
 const IGNORED_TYPES = new Set([
   'establishment',
@@ -32,15 +36,6 @@ function buildChainQuery(place: PlaceSummary): string {
   const name = place.displayName;
   const typeHint = place.types?.find((t) => !IGNORED_TYPES.has(t));
   return typeHint ? `${name} ${typeHint.replace(/_/g, ' ')}` : name;
-}
-
-function extractDomain(websiteUri?: string): string | undefined {
-  if (!websiteUri) return undefined;
-  try {
-    return new URL(websiteUri).hostname.replace('www.', '');
-  } catch {
-    return undefined;
-  }
 }
 
 const floatRocket = {
@@ -74,6 +69,12 @@ function OnboardingInner() {
   const domainRef = useRef<string | undefined>(undefined);
   const autoSubmittedRef = useRef(false);
   const brandPromiseRef = useRef<Promise<void> | null>(null);
+  const chainPromiseRef = useRef<Promise<void> | null>(null);
+  const screenshotPromiseRef = useRef<Promise<void> | null>(null);
+  const photosCountRef = useRef(0);
+  useEffect(() => {
+    photosCountRef.current = gatheringData.photos.length;
+  }, [gatheringData.photos.length]);
 
   // When URL params are present, skip showing the search input entirely
   const hasUrlParams = searchParams.has('place_id') && searchParams.has('name');
@@ -109,159 +110,18 @@ function OnboardingInner() {
       });
   }, [dispatch]);
 
-  const startReviewsFetch = useCallback((placeIds: string[]) => {
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'reviews', label: 'Apify Reviews' } });
-    fetch('/api/reviews', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ placeIds: placeIds.slice(0, 5), limit: 10 }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        const apifyReviews: ReviewItem[] = data.reviews ?? [];
-        dispatch({ type: 'MERGE_REVIEWS', payload: apifyReviews });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'done' } });
-      })
-      .catch((err: unknown) => {
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'reviews', status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
-      });
-  }, [dispatch]);
-
-  const startReviewAnalysisFetch = useCallback((confirmedLocs: LocationItem[], lite = true) => {
-    const places: PlaceSummary[] = confirmedLocs.map((loc) => ({
-      placeId: loc.id,
-      displayName: loc.name,
-      formattedAddress: loc.address,
-      location: { lat: loc.lat, lng: loc.lng },
-    }));
-
-    const trackKey = lite ? 'reviewAnalysis' : 'reviewAnalysisFull';
-    const trackLabel = lite ? 'Review Analysis (SSE lite)' : 'Review Analysis (SSE full)';
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: trackKey, label: trackLabel } });
-
-    fetch(`/api/demo/scan/analyze${lite ? '?lite=1' : ''}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locations: places }),
-    })
-      .then(async (res) => {
-        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `connected (${res.status})` } });
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let currentEvent = '';
-        let insightCount = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          let boundary: number;
-          while ((boundary = buffer.indexOf('\n\n')) !== -1) {
-            const message = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 2);
-
-            let eventName = '';
-            let eventData = '';
-
-            for (const line of message.split('\n')) {
-              if (line.startsWith('event: ')) {
-                eventName = line.slice(7).trim();
-              } else if (line.startsWith('data: ')) {
-                eventData = line.slice(6);
-              }
-            }
-
-            if (!eventName && currentEvent) eventName = currentEvent;
-            if (eventName) currentEvent = eventName;
-
-            if (eventName && eventData) {
-              try {
-                const data = JSON.parse(eventData);
-                if (eventName === 'batch_analysis') {
-                  const insights = data.insights as ReviewInsight[];
-                  insightCount += insights.length;
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `batch_analysis: +${insights.length} insights (total: ${insightCount})` } });
-                  dispatch({ type: 'APPEND_REVIEW_INSIGHTS', payload: insights });
-                } else if (eventName === 'analysis_update') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis_update: preview (${data.insights?.length ?? 0} insights)` } });
-                  // Preview only — feeds the loading screen, doesn't trigger results view
-                  dispatch({ type: 'SET_REVIEW_ANALYSIS_PREVIEW', payload: data as ReviewAnalysis });
-                } else if (eventName === 'analysis') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `analysis: final (${data.insights?.length ?? 0} insights)` } });
-                  const analysisData = data as ReviewAnalysis;
-                  dispatch({ type: 'SET_REVIEW_ANALYSIS', payload: analysisData });
-                } else if (eventName === 'error') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `ERROR: ${data.message ?? JSON.stringify(data)}` } });
-                } else if (eventName === 'timing') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `timing: ${data.label} (${data.detail ?? ''})` } });
-                } else if (eventName === 'reviews_progress') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `reviews: ${data.displayName} +${data.reviewCount} (${data.sort})` } });
-                  dispatch({ type: 'APPEND_REVIEW_PROGRESS', payload: { placeId: data.placeId, displayName: data.displayName, reviewCount: data.reviewCount, sort: data.sort } });
-                } else if (eventName === 'done') {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'done' } });
-                } else {
-                  dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `${eventName}` } });
-                }
-              } catch {
-                dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: `parse-error: ${eventName}` } });
-              }
-            }
-          }
-        }
-
-        dispatch({ type: 'TRACK_SSE_EVENT', payload: { key: trackKey, event: 'stream closed' } });
-
-        dispatch({
-          type: 'SET_REVIEW_ANALYSIS_FALLBACK',
-          payload: {
-            headline: '',
-            body: '',
-            insights: [],
-            totalReviewsAnalyzed: 0,
-            positiveCount: 0,
-            negativeCount: 0,
-            categoryBreakdown: [],
-            strengths: [],
-            opportunities: [],
-          },
-        });
-
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'done' } });
-      })
-      .catch((err: unknown) => {
-        dispatch({
-          type: 'SET_REVIEW_ANALYSIS',
-          payload: {
-            headline: '',
-            body: '',
-            insights: [],
-            totalReviewsAnalyzed: 0,
-            positiveCount: 0,
-            negativeCount: 0,
-            categoryBreakdown: [],
-            strengths: [],
-            opportunities: [],
-          },
-        });
-        dispatch({ type: 'TRACK_FETCH_END', payload: { key: trackKey, status: 'error', errorMessage: err instanceof Error ? err.message : 'Unknown error' } });
-      });
-  }, [dispatch]);
-
   const handleSearchSubmit = useCallback(async (place: PlaceSummary) => {
     dispatch({ type: 'SET_SELECTED_PLACE', payload: place });
     dispatch({ type: 'SET_LOADING', payload: true });
 
-    const domain = extractDomain(place.websiteUri);
+    track({
+      name: 'search_submitted',
+      props: { place_id: place.placeId, has_website: !!place.websiteUri },
+    });
 
-    // Fire primary location review scrape immediately (parallel with everything else)
+    const uriResult = classifyWebsiteUri(place.websiteUri);
+    const domain = uriResult.type === 'domain' ? uriResult.domain : undefined;
+
     const primaryLoc: LocationItem = {
       id: place.placeId,
       name: place.displayName,
@@ -272,31 +132,176 @@ function OnboardingInner() {
       userRatingCount: place.userRatingCount,
       rating: place.rating,
     };
-    startReviewAnalysisFetch([primaryLoc]);
 
     dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'places', label: 'Google Places Search' } });
-    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Logo.dev Brand' } });
+    if (uriResult.type !== 'social') {
+      dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Brand Extract' } });
+    }
 
-    try {
-      // Fire brand fetch in background — stored in ref so locations step can await it
-      brandPromiseRef.current = domain
+    // Set initial business immediately (brand fetch will overwrite with logo/colors)
+    dispatch({
+      type: 'SET_BUSINESS',
+      payload: {
+        name: place.displayName,
+        logoUrl: null,
+        domain: domain ?? '',
+        brandColors: ['#FFFFFF'],
+      },
+    });
+
+    // Set initial locations to just the primary location (chain discovery will add more)
+    dispatch({ type: 'SET_LOCATIONS', payload: [primaryLoc] });
+    domainRef.current = domain;
+
+    // Fire screenshot fetch immediately — it's fast (~0.5s) and needs to be ready
+    // by the time the website-scanning step renders
+    if (domain) {
+      dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'screenshot', label: 'Website Screenshot' } });
+      screenshotPromiseRef.current = fetch('/api/screenshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'done' } });
+          if (data.screenshot) {
+            dispatch({ type: 'UPDATE_BUSINESS', payload: { screenshot: data.screenshot } });
+          }
+        })
+        .catch(() => {
+          dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'error' } });
+        });
+    }
+
+    // Fire brand fetch in background
+    if (uriResult.type === 'social') {
+      // Instagram/social: use Apify Instagram scraper
+      dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'instagram', label: 'Instagram Profile' } });
+      brandPromiseRef.current = fetch('/api/instagram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instagramUrl: uriResult.originalUrl }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'instagram', status: 'done' } });
+          dispatch({
+            type: 'UPDATE_BUSINESS',
+            payload: {
+              name: place.displayName,
+              logoUrl: data.logo ?? null,
+              brandColors: data.colors ?? ['#FFFFFF'],
+              instagramUsername: data.username ?? null,
+            },
+          });
+
+          // If Instagram profile has an external website, fire full brand + screenshot fetch
+          if (data.discoveredDomain) {
+            domainRef.current = data.discoveredDomain;
+            dispatch({ type: 'UPDATE_BUSINESS', payload: { domain: data.discoveredDomain } });
+
+            dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'screenshot', label: 'Website Screenshot' } });
+            screenshotPromiseRef.current = fetch('/api/screenshot', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ domain: data.discoveredDomain }),
+            })
+              .then((r) => r.json())
+              .then((d) => {
+                dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'done' } });
+                if (d.screenshot) {
+                  dispatch({ type: 'UPDATE_BUSINESS', payload: { screenshot: d.screenshot } });
+                }
+              })
+              .catch(() => {
+                dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'error' } });
+              });
+
+            // Also fire Firecrawl brand fetch for richer colors/fonts
+            dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Brand Extract' } });
+            fetch('/api/brand', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ domain: data.discoveredDomain }),
+            })
+              .then((r) => r.json())
+              .then((d) => {
+                dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } });
+                dispatch({
+                  type: 'UPDATE_BUSINESS',
+                  payload: {
+                    logoUrl: d.logoUrl ?? data.logo ?? null,
+                    brandColors: d.colors?.length > 1 ? d.colors : data.colors ?? ['#FFFFFF'],
+                    logoDevUrl: d.logoDevUrl ?? null,
+                    fonts: d.fonts ?? [],
+                    ogImage: d.ogImage ?? null,
+                    favicon: d.favicon ?? null,
+                    websiteImages: d.websiteImages ?? [],
+                  },
+                });
+              })
+              .catch(() => {
+                dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'error' } });
+              });
+          }
+        })
+        .catch(() => {
+          dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'instagram', status: 'error' } });
+        });
+    } else {
+      // Standard domain or booking URL: use Firecrawl brand fetch
+      const brandBody: Record<string, string> = {};
+      if (domain) {
+        brandBody.domain = domain;
+      } else if (uriResult.type === 'booking') {
+        brandBody.bookingUrl = uriResult.originalUrl;
+        brandBody.businessName = place.displayName;
+      }
+
+      brandPromiseRef.current = Object.keys(brandBody).length > 0
         ? fetch('/api/brand', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ domain }),
+            body: JSON.stringify(brandBody),
           })
             .then((res) => res.json())
             .then((data) => {
               dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } });
+              const resolvedDomain = data.discoveredDomain ?? domain ?? '';
+              if (resolvedDomain) {
+                domainRef.current = resolvedDomain;
+                // If domain was discovered from booking URL, fire screenshot for the real domain
+                if (data.discoveredDomain && !domain) {
+                  dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'screenshot', label: 'Website Screenshot' } });
+                  screenshotPromiseRef.current = fetch('/api/screenshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain: data.discoveredDomain }),
+                  })
+                    .then((r) => r.json())
+                    .then((d) => {
+                      dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'done' } });
+                      if (d.screenshot) {
+                        dispatch({ type: 'UPDATE_BUSINESS', payload: { screenshot: d.screenshot } });
+                      }
+                    })
+                    .catch(() => {
+                      dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'error' } });
+                    });
+                }
+              }
               dispatch({
-                type: 'SET_BUSINESS',
+                type: 'UPDATE_BUSINESS',
                 payload: {
-                  name: data.name ?? place.displayName,
+                  name: place.displayName,
                   logoUrl: data.logoUrl ?? null,
-                  domain: domain ?? '',
+                  domain: resolvedDomain,
                   brandColors: data.colors ?? ['#FFFFFF'],
+                  logoDevUrl: data.logoDevUrl ?? null,
                   fonts: data.fonts ?? [],
                   ogImage: data.ogImage ?? null,
+                  favicon: data.favicon ?? null,
                   websiteImages: data.websiteImages ?? [],
                 },
               });
@@ -304,101 +309,84 @@ function OnboardingInner() {
             .catch(() => {
               dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'error' } });
             })
-        : null;
-
-      // Await chain discovery only — it's faster
-      const chainResult = await fetch('/api/places/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: buildChainQuery(place),
-          ...(domain && { websiteDomain: domain }),
-        }),
-      }).then((res) => res.json() as Promise<TextSearchResponse>);
-      dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } });
-
-      const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
-        const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
-        const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
-        const locationLabel = streetName
-          ? `${place.displayName} - ${streetName}`
-          : p.displayName;
-
-        return {
-          id: p.placeId,
-          name: locationLabel,
-          address: p.formattedAddress,
-          countryCode: p.countryCode,
-          lat: p.location.lat,
-          lng: p.location.lng,
-          userRatingCount: p.userRatingCount,
-          rating: p.rating,
-        };
-      });
-
-      const filteredLocations = place.countryCode
-        ? chainLocations.filter(loc => loc.countryCode === place.countryCode)
-        : chainLocations;
-
-      const selectedCountry = place.countryCode;
-      filteredLocations.sort((a, b) => {
-        if (a.countryCode === selectedCountry && b.countryCode !== selectedCountry) return -1;
-        if (b.countryCode === selectedCountry && a.countryCode !== selectedCountry) return 1;
-        return (a.countryCode ?? '').localeCompare(b.countryCode ?? '');
-      });
-
-      dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
-      domainRef.current = domain;
-
-      // Set initial business immediately (brand fetch will overwrite with logo/colors)
-      dispatch({
-        type: 'SET_BUSINESS',
-        payload: {
-          name: place.displayName,
-          logoUrl: null,
-          domain: domain ?? '',
-          brandColors: ['#FFFFFF'],
-        },
-      });
-
-      // Fire place details in background
-      const detailPlaceIds = [
-        place.placeId,
-        ...filteredLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
-      ].slice(0, 10);
-
-      fetch('/api/places/details', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ placeIds: detailPlaceIds }),
-      })
-        .then((res) => res.json() as Promise<PlaceDetailsResponse>)
-        .then((data) => {
-          const allDetails = data.details ?? [];
-          const allReviews = allDetails.flatMap((d) =>
-            (d.reviews ?? []).map((r) => ({
-              author: r.authorName,
-              rating: r.rating,
-              text: r.text,
-              date: r.relativePublishTimeDescription,
-            })),
-          );
-          if (allReviews.length > 0) {
-            dispatch({ type: 'MERGE_REVIEWS', payload: allReviews });
-          }
-          const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
-          if (allPhotos.length > 0) {
-            dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
-          }
-        })
-        .catch(() => {});
-
-      dispatch({ type: 'SET_LOADING', payload: false });
-      goForward('confirm-locations'); // Locations first (chain data ready), business second (brand still loading)
-    } catch {
-      dispatch({ type: 'SET_LOADING', payload: false });
+        : Promise.resolve();
     }
-  }, [dispatch, startReviewsFetch, startReviewAnalysisFetch]);
+
+    // Fire chain discovery in background (no await — map-scanning shows pins as they arrive)
+    chainPromiseRef.current = fetch('/api/places/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: buildChainQuery(place),
+        ...(domain && { websiteDomain: domain }),
+      }),
+    })
+      .then((res) => res.json() as Promise<TextSearchResponse>)
+      .then((chainResult) => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'done' } });
+
+        const chainLocations: LocationItem[] = (chainResult.places ?? []).map((p: PlaceSummary) => {
+          const firstSegment = (p.formattedAddress ?? '').split(',')[0].trim();
+          const streetName = firstSegment.replace(/\s*\d[\d\w/-]*$/, '').trim();
+          const locationLabel = streetName
+            ? `${place.displayName} - ${streetName}`
+            : p.displayName;
+
+          return {
+            id: p.placeId,
+            name: locationLabel,
+            address: p.formattedAddress,
+            countryCode: p.countryCode,
+            lat: p.location.lat,
+            lng: p.location.lng,
+            userRatingCount: p.userRatingCount,
+            rating: p.rating,
+          };
+        });
+
+        const filteredLocations = domain
+          ? chainLocations
+          : chainLocations.filter(loc => !place.countryCode || loc.countryCode === place.countryCode);
+
+        const selectedCountry = place.countryCode;
+        filteredLocations.sort((a, b) => {
+          if (a.countryCode === selectedCountry && b.countryCode !== selectedCountry) return -1;
+          if (b.countryCode === selectedCountry && a.countryCode !== selectedCountry) return 1;
+          return (a.countryCode ?? '').localeCompare(b.countryCode ?? '');
+        });
+
+        dispatch({ type: 'SET_LOCATIONS', payload: filteredLocations });
+        dispatch({ type: 'SET_CHAIN_DISCOVERY_DONE' });
+
+        // Fire place details in background
+        const detailPlaceIds = [
+          place.placeId,
+          ...filteredLocations.slice(0, 9).map((l) => l.id).filter((id) => id !== place.placeId),
+        ].slice(0, 10);
+
+        fetch('/api/places/details', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ placeIds: detailPlaceIds }),
+        })
+          .then((res) => res.json() as Promise<PlaceDetailsResponse>)
+          .then((data) => {
+            const allDetails = data.details ?? [];
+            const allPhotos = allDetails.flatMap((d) => d.photos ?? []);
+            if (allPhotos.length > 0) {
+              dispatch({ type: 'UPDATE_GATHERING_DATA', payload: { photos: allPhotos } });
+            }
+          })
+          .catch(() => {});
+      })
+      .catch(() => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'places', status: 'error' } });
+        dispatch({ type: 'SET_CHAIN_DISCOVERY_DONE' });
+      });
+
+    dispatch({ type: 'SET_LOADING', payload: false });
+    goForward('map-scanning');
+  }, [dispatch]);
 
   // Auto-submit when URL params are present (e.g. ?place_id=...&name=...&address=...)
   // Fetches full place details from Google first so chain discovery has website/location data
@@ -452,96 +440,128 @@ function OnboardingInner() {
       });
   }, [searchParams, handleSearchSubmit, dispatch]);
 
-  const handleBusinessConfirm = useCallback(
-    (data: { name: string; website: string; colors: string[] }) => {
-      if (business) {
+  const handleMapScanningComplete = useCallback(() => {
+    // Don't await chain/brand promises — they continue in the background and
+    // downstream steps (photos-scanning, website-scanning) handle their own
+    // loading states. Blocking here was the main reason the map step got
+    // stuck for a long time when Google Places or Firecrawl was slow.
+    if (photosCountRef.current > 0) {
+      goForward('photos-scanning');
+      return;
+    }
+
+    if (domainRef.current) {
+      goForward('website-scanning');
+    } else {
+      goForward('website-prompt');
+    }
+  }, []);
+
+  const handlePhotosScanningComplete = useCallback(() => {
+    if (domainRef.current) {
+      goForward('website-scanning');
+    } else {
+      goForward('website-prompt');
+    }
+  }, []);
+
+  const handleWebsiteScanningComplete = useCallback(async () => {
+    if (brandPromiseRef.current) await brandPromiseRef.current;
+    goForward('confirm');
+  }, []);
+
+  const handleWebsitePromptSubmit = useCallback((rawUrl: string) => {
+    const domain = extractDomain(rawUrl) ?? rawUrl.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!domain) return;
+    domainRef.current = domain;
+    dispatch({ type: 'UPDATE_BUSINESS', payload: { domain } });
+
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'screenshot', label: 'Website Screenshot' } });
+    screenshotPromiseRef.current = fetch('/api/screenshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'done' } });
+        if (d.screenshot) dispatch({ type: 'UPDATE_BUSINESS', payload: { screenshot: d.screenshot } });
+      })
+      .catch(() => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'screenshot', status: 'error' } });
+      });
+
+    dispatch({ type: 'TRACK_FETCH_START', payload: { key: 'brand', label: 'Brand Extract' } });
+    brandPromiseRef.current = fetch('/api/brand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'done' } });
         dispatch({
           type: 'UPDATE_BUSINESS',
-          payload: { name: data.name, domain: data.website, brandColors: data.colors },
+          payload: {
+            logoUrl: data.logoUrl ?? null,
+            brandColors: data.colors?.length > 0 ? data.colors : ['#FFFFFF'],
+            logoDevUrl: data.logoDevUrl ?? null,
+            fonts: data.fonts ?? [],
+            ogImage: data.ogImage ?? null,
+            favicon: data.favicon ?? null,
+            websiteImages: data.websiteImages ?? [],
+          },
         });
-      }
+      })
+      .catch(() => {
+        dispatch({ type: 'TRACK_FETCH_END', payload: { key: 'brand', status: 'error' } });
+      });
+
+    goForward('website-scanning');
+  }, [dispatch]);
+
+  const handleWebsitePromptSkip = useCallback(() => {
+    goForward('confirm');
+  }, []);
+
+  const handleConfirm = useCallback(
+    (data: { name: string; website: string; colors: string[]; locations: LocationItem[] }) => {
+      dispatch({
+        type: 'UPDATE_BUSINESS',
+        payload: { name: data.name, domain: data.website, brandColors: data.colors },
+      });
+      dispatch({ type: 'SET_LOCATIONS', payload: data.locations });
 
       const domain = domainRef.current ?? data.website;
       startBackgroundFetch(domain);
 
-      goForward('gathering'); // Business → Gathering
+      goForward('mockup');
     },
-    [business, startBackgroundFetch, dispatch],
+    [startBackgroundFetch, dispatch],
   );
 
-  const handleLocationsEarlyStart = useCallback((confirmedLocs: LocationItem[]) => {
-    // Full analysis — SSE endpoint handles review scraping internally
-    if (confirmedLocs.length > 0) {
-      startReviewAnalysisFetch(confirmedLocs, false);
-    }
-  }, [startReviewAnalysisFetch]);
-
-  const handleLocationsConfirm = useCallback(async (confirmedLocs: LocationItem[]) => {
-    dispatch({ type: 'SET_LOCATIONS', payload: confirmedLocs });
-    // Wait for brand data so "Is this you?" has logo/colors ready
-    if (brandPromiseRef.current) {
-      await brandPromiseRef.current;
-    }
-    goForward('confirm-business');
-  }, [dispatch]);
-
-  const handleGatheringComplete = useCallback(() => {
-    // No-op: stay on gathering page (branded-app phase)
-  }, []);
-
   const handleBack = useCallback(() => {
-    if (step === 'confirm-business') {
-      goBack('confirm-locations');
-    } else if (step === 'confirm-locations') {
+    if (step === 'confirm') {
       goBack('search');
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [step, dispatch]);
 
-  // Generate feed posts when analysis is ready
-  const feedPostsGeneratedRef = useRef(false);
-  useEffect(() => {
-    if (!gatheringData.reviewAnalysis || feedPostsGeneratedRef.current) return;
-    if (!business?.name) return;
-    feedPostsGeneratedRef.current = true;
-
-    fetch('/api/demo/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ businessName: business.name, analysis: gatheringData.reviewAnalysis }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.posts?.length > 0) {
-          dispatch({ type: 'SET_FEED_POSTS', payload: data.posts });
-        }
-      })
-      .catch(() => {});
-  }, [gatheringData.reviewAnalysis, business?.name, dispatch]);
-
-  const showBack = step === 'confirm-business' || step === 'confirm-locations';
   const showLogo = step === 'search';
-  const showIllustrations = step !== 'gathering' && step !== 'done';
-  const isFullBleed = step === 'gathering' || step === 'done';
+  const isShellStep =
+    step === 'map-scanning' ||
+    step === 'photos-scanning' ||
+    step === 'website-prompt' ||
+    step === 'website-scanning' ||
+    step === 'confirm';
+  const showIllustrations = step === 'search';
 
   return (
-    <div className={`relative flex flex-col items-center min-h-dvh bg-gray-50/40 font-sans ${isFullBleed ? 'overflow-hidden' : 'overflow-y-auto justify-center py-12'}`}>
-      <AnimatePresence>
-        {showBack && (
-          <motion.div
-            className="fixed top-5 left-5 z-50"
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -12 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ChevronLeft className="size-5" />
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+    <div
+      className={`relative flex flex-col items-center min-h-dvh bg-gray-50/40 font-sans overflow-hidden ${
+        step === 'search' ? 'justify-center py-12' : ''
+      }`}
+    >
       <AnimatePresence>
         {showLogo && (
           <motion.div
@@ -585,30 +605,44 @@ function OnboardingInner() {
           </motion.div>
         )}
 
-        {step === 'confirm-business' && business && (
-          <StepConfirmBusiness
-            key="step-confirm-business"
-            direction={directionRef.current}
-            business={business}
-            onConfirm={handleBusinessConfirm}
-          />
+        {isShellStep && (
+          <OnboardingShell
+            key="step-shell"
+            current={1}
+            onBack={step === 'confirm' ? handleBack : undefined}
+          >
+            <AnimatePresence mode="wait" custom={directionRef.current}>
+              {step === 'map-scanning' && (
+                <StepMapScanning key="map-scanning" onComplete={handleMapScanningComplete} />
+              )}
+              {step === 'photos-scanning' && (
+                <StepPhotosScanning key="photos-scanning" onComplete={handlePhotosScanningComplete} />
+              )}
+              {step === 'website-prompt' && (
+                <StepWebsitePrompt
+                  key="website-prompt"
+                  direction={directionRef.current}
+                  loading={false}
+                  onSubmit={handleWebsitePromptSubmit}
+                  onSkip={handleWebsitePromptSkip}
+                />
+              )}
+              {step === 'website-scanning' && (
+                <StepWebsiteScanning key="website-scanning" onComplete={handleWebsiteScanningComplete} />
+              )}
+              {step === 'confirm' && (
+                <StepConfirm
+                  key="confirm"
+                  direction={directionRef.current}
+                  onConfirm={handleConfirm}
+                />
+              )}
+            </AnimatePresence>
+          </OnboardingShell>
         )}
 
-        {step === 'confirm-locations' && (
-          <StepConfirmLocations
-            key="step-confirm-locations"
-            direction={directionRef.current}
-            locations={locations}
-            onEarlyStart={handleLocationsEarlyStart}
-            onConfirm={handleLocationsConfirm}
-          />
-        )}
-
-        {step === 'gathering' && business && (
-          <StepGathering
-            key="step-gathering"
-            onComplete={handleGatheringComplete}
-          />
+        {step === 'mockup' && business && (
+          <StepMockup key="step-mockup" />
         )}
 
         {step === 'done' && <StepDone key="step-done" />}
@@ -621,7 +655,7 @@ function OnboardingInner() {
               key="rocket"
               src="/ag-rocket.svg"
               alt=""
-              className="fixed bottom-6 left-6 pointer-events-none select-none"
+              className="fixed bottom-4 left-4 md:bottom-6 md:left-6 w-14 md:w-auto pointer-events-none select-none"
               animate={floatRocket}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
@@ -630,7 +664,7 @@ function OnboardingInner() {
               key="pineapple"
               src="/ag-pineapple.svg"
               alt=""
-              className="fixed top-12 right-12 pointer-events-none select-none"
+              className="fixed top-4 right-4 md:top-12 md:right-12 w-8 md:w-auto pointer-events-none select-none"
               animate={floatPineapple}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
@@ -668,7 +702,7 @@ function FetchTimingsDebug({ timings }: { timings: Record<string, FetchTiming> }
   };
 
   return (
-    <div className="fixed bottom-4 left-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono backdrop-blur-sm min-w-[280px] max-w-[420px]">
+    <div className="fixed bottom-4 right-4 z-[9999] bg-black/80 text-white rounded-xl px-4 py-3 text-xs font-mono backdrop-blur-sm min-w-[280px] max-w-[420px]">
       <div
         className="flex items-center justify-between cursor-pointer select-none"
         onClick={() => setCollapsed((p) => !p)}

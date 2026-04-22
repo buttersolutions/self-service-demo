@@ -30,7 +30,7 @@ export async function fetchApifyReviews(
   if (!APIFY_TOKEN) throw new Error("APIFY_TOKEN not configured");
   if (placeIds.length === 0) return [];
 
-  const url = `${BASE}?token=${APIFY_TOKEN}&format=json&timeout=${timeoutSecs}`;
+  const url = `${BASE}?token=${APIFY_TOKEN}&format=json&timeout=${timeoutSecs}&memory=1024`;
 
   const controller = new AbortController();
   const clientTimeout = setTimeout(() => controller.abort(), timeoutSecs * 1000);
@@ -42,8 +42,9 @@ export async function fetchApifyReviews(
       placeIds,
       maxReviews,
       reviewsSort: sort,
+      reviewsOrigin: "google",
       language: "en",
-      personalData: true,
+      personalData: false,
     }),
     signal: controller.signal,
   });
@@ -56,7 +57,7 @@ export async function fetchApifyReviews(
   }
 
   const items: ApifyReview[] = await res.json();
-  return items.filter((r) => r.text && r.text.trim().length > 0);
+  return items;
 }
 
 /**

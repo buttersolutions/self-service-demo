@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import { Inter, Merriweather } from "next/font/google";
 import Script from "next/script";
+import { GoogleTagManager } from "@next/third-parties/google";
 import { Toaster } from "sonner";
+import { ConsentBanner } from "@/components/consent-banner";
 import "./globals.css";
+
+const GTM_ID = process.env.NEXT_PUBLIC_GTM_CONTAINER_ID;
 
 const inter = Inter({
   variable: "--font-inter",
@@ -30,7 +34,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${merriweather.variable} antialiased`}>
+      <body className={`${inter.variable} ${merriweather.variable} font-sans antialiased`}>
+        {GTM_ID && <GoogleTagManager gtmId={GTM_ID} />}
+        <ConsentBanner />
         {children}
         <Toaster position="top-center" />
         <Script

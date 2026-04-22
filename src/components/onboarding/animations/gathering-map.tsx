@@ -11,17 +11,30 @@ import MapLibreGL from 'maplibre-gl';
 interface GatheringMapProps {
   locations: LocationItem[];
   isActive: boolean;
+  onAllPinsRevealed?: () => void;
 }
 
 // Light, desaturated CARTO Voyager style with whiter tones
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 const MAP_STYLES = { light: MAP_STYLE, dark: MAP_STYLE };
 
-export function GatheringMap({ locations, isActive }: GatheringMapProps) {
+export function GatheringMap({ locations, isActive, onAllPinsRevealed }: GatheringMapProps) {
   const mapRef = useRef<MapLibreGL.Map>(null);
   const displayLocations = useMemo(() => locations.slice(0, 20), [locations]);
   const [visiblePins, setVisiblePins] = useState<Set<number>>(new Set());
   const [cameraReady, setCameraReady] = useState(false);
+  const prevLocationCountRef = useRef(displayLocations.length);
+  const revealedRef = useRef(false);
+
+  // Reset camera when new locations arrive (e.g., chain discovery resolves)
+  useEffect(() => {
+    if (displayLocations.length > prevLocationCountRef.current) {
+      setCameraReady(false);
+      setVisiblePins(new Set());
+      revealedRef.current = false;
+    }
+    prevLocationCountRef.current = displayLocations.length;
+  }, [displayLocations.length]);
 
   const initialCenter = useMemo<[number, number]>(() => {
     if (displayLocations.length === 0) return [0, 20];
@@ -161,8 +174,17 @@ export function GatheringMap({ locations, isActive }: GatheringMapProps) {
       );
     });
 
+    const lastPinAt = Math.max(0, displayLocations.length - 1) * staggerMs + 400;
+    timers.push(
+      setTimeout(() => {
+        if (revealedRef.current) return;
+        revealedRef.current = true;
+        onAllPinsRevealed?.();
+      }, lastPinAt),
+    );
+
     return () => timers.forEach(clearTimeout);
-  }, [cameraReady, displayLocations]);
+  }, [cameraReady, displayLocations, onAllPinsRevealed]);
 
   return (
     <div className="w-full h-full relative overflow-hidden">
