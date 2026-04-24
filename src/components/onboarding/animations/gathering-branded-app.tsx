@@ -7,7 +7,7 @@ import {
   Home, TrendingUp, FileText, GraduationCap, CalendarDays,
   Users, Puzzle, MessageCircle, Bell, Settings,
   Heart, Eye, CornerDownLeft, SmilePlus, MoreVertical, Plus, MapPin, CalendarPlus,
-  Check, Palmtree, Briefcase, Mail,
+  Check, Palmtree, Briefcase, Mail, ChevronLeft,
 } from 'lucide-react';
 import { OnboardingButton, OnboardingInput } from '../ui';
 import { useOnboarding } from '@/lib/demo-flow-context';
@@ -23,6 +23,7 @@ interface GatheringBrandedAppProps {
   locations: LocationItem[];
   photos: PlacePhoto[];
   isActive: boolean;
+  onBack?: () => void;
 }
 
 const PEOPLE = [
@@ -751,6 +752,7 @@ export function GatheringBrandedApp({
   locations,
   photos,
   isActive,
+  onBack,
 }: GatheringBrandedAppProps) {
   const { brandColorMap, state } = useOnboarding();
   const primaryColor = brandColorMap.primaryColor;
@@ -838,11 +840,22 @@ export function GatheringBrandedApp({
       >
         <div className="w-full h-full p-2 sm:p-4 bg-[#625CE4]">
           <motion.div
-            className="w-full h-full flex flex-col md:flex-row rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
+            className="w-full h-full flex flex-col md:flex-row rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden relative"
             initial={{ opacity: 0 }}
             animate={isActive ? { opacity: 1 } : {}}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
+            {/* Mobile back button — overlaid on the card's top-left */}
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="md:hidden absolute top-3 left-3 z-30 size-9 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center text-gray-600 shadow-sm hover:bg-white transition-colors cursor-pointer"
+                aria-label="Back"
+              >
+                <ChevronLeft className="size-5" />
+              </button>
+            ) : null}
             {/* Left sidebar — hidden on mobile */}
             <motion.div
               className="hidden md:flex w-80 shrink-0 flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
@@ -851,8 +864,18 @@ export function GatheringBrandedApp({
               transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="flex-1 px-3.5 py-5">
-                {/* Logo */}
-                <div className="px-2.5 mb-5">
+                {/* Logo + back */}
+                <div className="flex items-center gap-2 px-2.5 mb-5">
+                  {onBack ? (
+                    <button
+                      type="button"
+                      onClick={onBack}
+                      className="size-8 -ml-2 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer"
+                      aria-label="Back"
+                    >
+                      <ChevronLeft className="size-5" />
+                    </button>
+                  ) : null}
                   <AllgravyLogo className="w-24 text-gray-900" />
                 </div>
 

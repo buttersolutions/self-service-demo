@@ -14,13 +14,13 @@ export interface ResolvedLogo {
 
 /**
  * Resolves how to display the business logo. Strategy:
- *   1. Firecrawl logo is DARK (safe on white)  → use it, render natively
- *   2. Firecrawl logo is LIGHT or missing + logo.dev URL exists → use logo.dev, render as square
- *   3. Nothing available → null (caller shows letter badge)
+ *   1. logo.dev URL exists → use it (curated, always-square, bg-safe catalog asset)
+ *   2. Firecrawl logo exists AND is dark enough to render on white → use it natively
+ *   3. Nothing usable → null (caller shows letter badge)
  *
- * This avoids wrapping the Firecrawl logo in a brand-color pill (risky — we
- * might pick the wrong color). Instead we fall through to logo.dev's curated,
- * consistent catalog asset.
+ * logo.dev is preferred because its catalog assets are consistently sized,
+ * square, and safe on any background. The Firecrawl logo is kept as a
+ * fallback for domains logo.dev doesn't index.
  */
 export function resolveLogo(business: BusinessData | null | undefined): ResolvedLogo {
   // After handleConfirm locks in the chosen logo it writes it into `logoUrl`.
@@ -31,12 +31,12 @@ export function resolveLogo(business: BusinessData | null | undefined): Resolved
     return { src: business.logoUrl, isSquareFallback: true };
   }
 
-  if (business?.logoUrl && business.logoIsLight !== true) {
-    return { src: business.logoUrl, isSquareFallback: false };
-  }
-
   if (business?.logoDevUrl) {
     return { src: business.logoDevUrl, isSquareFallback: true };
+  }
+
+  if (business?.logoUrl && business.logoIsLight !== true) {
+    return { src: business.logoUrl, isSquareFallback: false };
   }
 
   return { src: null, isSquareFallback: false };

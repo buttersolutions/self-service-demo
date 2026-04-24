@@ -87,6 +87,15 @@ function OnboardingFeedbackInner() {
     dispatch({ type: 'SET_STEP', payload: next });
   };
 
+  const goBack = (prev: Step) => {
+    directionRef.current = -1;
+    dispatch({ type: 'SET_STEP', payload: prev });
+  };
+
+  const handleMockupBack = useCallback(() => {
+    goBack('feedback-confirm');
+  }, []);
+
   // ── Background fetches ────────────────────────────────────────────────
 
   const startBackgroundFetch = useCallback((domain: string) => {
@@ -608,7 +617,7 @@ function OnboardingFeedbackInner() {
         )}
 
         {step === 'mockup' && (
-          <StepMockup key="step-mockup" />
+          <StepMockup key="step-mockup" onBack={handleMockupBack} />
         )}
       </AnimatePresence>
 

@@ -544,6 +544,8 @@ function OnboardingInner() {
     if (step === 'confirm') {
       goBack('search');
       dispatch({ type: 'SET_LOADING', payload: false });
+    } else if (step === 'mockup') {
+      goBack('confirm');
     }
   }, [step, dispatch]);
 
@@ -642,7 +644,7 @@ function OnboardingInner() {
         )}
 
         {step === 'mockup' && business && (
-          <StepMockup key="step-mockup" />
+          <StepMockup key="step-mockup" onBack={handleBack} />
         )}
 
         {step === 'done' && <StepDone key="step-done" />}
