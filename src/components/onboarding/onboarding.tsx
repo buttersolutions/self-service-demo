@@ -237,7 +237,6 @@ function OnboardingInner() {
                     fonts: d.fonts ?? [],
                     ogImage: d.ogImage ?? null,
                     favicon: d.favicon ?? null,
-                    websiteImages: d.websiteImages ?? [],
                   },
                 });
               })
@@ -302,7 +301,6 @@ function OnboardingInner() {
                   fonts: data.fonts ?? [],
                   ogImage: data.ogImage ?? null,
                   favicon: data.favicon ?? null,
-                  websiteImages: data.websiteImages ?? [],
                 },
               });
             })
@@ -509,7 +507,6 @@ function OnboardingInner() {
             fonts: data.fonts ?? [],
             ogImage: data.ogImage ?? null,
             favicon: data.favicon ?? null,
-            websiteImages: data.websiteImages ?? [],
           },
         });
       })

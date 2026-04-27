@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { scrapeWebsiteBranding, scrapeForBusinessDomain, type FirecrawlBrandData } from '@/lib/firecrawl';
 import { describeBrand, type BrandData as LogoDevBrand } from '@/lib/logodev';
 
+// Vercel function timeout — must exceed the per-call Firecrawl client/server
+// timeouts (15s + 3s buffer) plus headroom for the parallel logo.dev call.
+export const maxDuration = 30;
+
 const LOGO_DEV_PUBLIC_KEY = process.env.LOGO_DEV_PUBLIC_KEY;
 
 function buildLogoDevUrl(domain: string | null): string | null {
@@ -91,7 +95,6 @@ function buildResponse(
       colors,
       fonts: [],
       ogImage: null,
-      websiteImages: [],
       ...(discoveredDomain && { discoveredDomain }),
     };
   }
@@ -104,7 +107,6 @@ function buildResponse(
     fonts: firecrawl ? firecrawl.fonts.map((f) => f.family).filter(Boolean) : [],
     ogImage: firecrawl?.ogImage ?? null,
     favicon: firecrawl?.favicon ?? null,
-    websiteImages: firecrawl?.websiteImages ?? [],
     ...(discoveredDomain && { discoveredDomain }),
   };
 }

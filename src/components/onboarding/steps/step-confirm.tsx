@@ -304,7 +304,6 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
               logoDevUrl: data.logoDevUrl ?? null,
               fonts: data.fonts ?? [],
               ogImage: data.ogImage ?? null,
-              websiteImages: data.websiteImages ?? [],
             },
           });
         })

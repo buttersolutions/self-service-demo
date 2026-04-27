@@ -25,7 +25,6 @@ export interface BusinessData {
   ogImage?: string | null;
   screenshot?: string | null;
   favicon?: string | null;
-  websiteImages?: string[];
   instagramUsername?: string | null;
   /**
    * Logo.dev URL — a curated, always-square, always-bg-safe logo from
