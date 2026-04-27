@@ -7,7 +7,7 @@ This document describes the complete user journey when a prospect visits the sel
 ## Flow overview
 
 ```
-Search → Reviews Analysis → Branding Confirmation → App Mockup → Get Started (Cal.com + OTP)
+Search → Reviews Analysis → Branding Confirmation → App Mockup → Get Started (OTP)
 ```
 
 Progress bar labels:
@@ -133,7 +133,7 @@ At the bottom: a **"Get started"** button with a white gradient overlay.
 
 ---
 
-## Step 5 — Get Started (3-step dialog)
+## Step 5 — Get Started (2-step dialog)
 
 Clicking "Get started" opens a modal dialog.
 
@@ -143,19 +143,9 @@ Clicking "Get started" opens a modal dialog.
 - Phone number (with searchable country code picker, auto-detected from location)
 - Work email
 
-Clicking **"Continue"** sends the OTP email immediately, then advances to the booking step.
+Clicking **"Continue"** sends the OTP email immediately, then advances to verification.
 
-### 5b. Cal.com booking ("While you wait")
-
-> **"Code on its way — book a walkthrough while you wait"**
->
-> We sent a 6-digit code to **{email}**. Pick a time for a 30-min demo, or skip ahead.
-
-An embedded Cal.com scheduler lets the user book a demo. If they complete a booking, the dialog auto-advances (with a toast: "Demo booked — see you then!"). They can also click **"Continue to verification"** or **"Skip for now"** at any time.
-
-The dialog widens slightly to accommodate the calendar embed.
-
-### 5c. OTP verification
+### 5b. OTP verification
 
 - 6-character code input (alphanumeric, monospace)
 - **"Verify & Get Started"** button
@@ -185,4 +175,3 @@ The copy, progress labels, and transition design are all built to make this 1-2-
 - Pipeline runs ~35-40 seconds end-to-end
 - All branding work (logo, colours, screenshots, chain discovery) runs in parallel with the analysis — by the time the report is ready, branding is already done
 - PDF export uses html2canvas + jsPDF to capture the report exactly as rendered
-- Cal.com embed is env-configurable (`NEXT_PUBLIC_CALCOM_BOOKING_LINK` + `NEXT_PUBLIC_CALCOM_ORIGIN` for EU regions)

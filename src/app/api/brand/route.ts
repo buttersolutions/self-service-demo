@@ -76,14 +76,18 @@ function buildResponse(
   discoveredDomain?: string | null,
 ) {
   const resolvedDomain = discoveredDomain ?? domain ?? null;
-  const logoDevUrl = buildLogoDevUrl(resolvedDomain);
+  // Only construct a logo URL when logo.dev's describe API confirmed the brand
+  // is in their catalog. Without this gate, img.logo.dev returns a generic
+  // letter-tile placeholder for unknown domains, which our resolver would then
+  // pick over the (correct) letter-badge fallback.
+  const logoDevUrl = logoDev ? buildLogoDevUrl(resolvedDomain) : null;
   const colors = mergePalette(logoDev, firecrawl);
 
   if (!firecrawl && !logoDev) {
     return {
       name: null,
       logoUrl: null,
-      logoDevUrl,
+      logoDevUrl: null,
       colors,
       fonts: [],
       ogImage: null,
@@ -94,7 +98,7 @@ function buildResponse(
 
   return {
     name: firecrawl?.name ?? logoDev?.name ?? null,
-    logoUrl: firecrawl?.logo ?? null,
+    logoUrl: logoDevUrl,
     logoDevUrl,
     colors,
     fonts: firecrawl ? firecrawl.fonts.map((f) => f.family).filter(Boolean) : [],
