@@ -4,40 +4,21 @@ export interface ResolvedLogo {
   /** URL to render; null when the caller should render a letter badge. */
   src: string | null;
   /**
-   * True when the source is a logo.dev fallback. Callers render these in a
-   * fixed square frame (always 128×128 catalog assets, always bg-safe). The
-   * native Firecrawl logo (`isSquareFallback=false`) is rendered natively
-   * with a height cap to preserve wordmark aspect ratios.
+   * True when the logo should be rendered in a fixed square frame edge-to-edge.
+   * logo.dev catalog assets are 128×128 squares; Instagram profile pics are
+   * also square. Always true when src is set — kept for compatibility with
+   * existing call sites that branch on it.
    */
   isSquareFallback: boolean;
 }
 
 /**
- * Resolves how to display the business logo. Strategy:
- *   1. Firecrawl logo is DARK (safe on white)  → use it, render natively
- *   2. Firecrawl logo is LIGHT or missing + logo.dev URL exists → use logo.dev, render as square
- *   3. Nothing available → null (caller shows letter badge)
- *
- * This avoids wrapping the Firecrawl logo in a brand-color pill (risky — we
- * might pick the wrong color). Instead we fall through to logo.dev's curated,
- * consistent catalog asset.
+ * Resolves how to display the business logo. Logos come from logo.dev's
+ * curated catalog (preferred) or Instagram's profile picture (when the user
+ * arrives via a social URI). Both are square. If neither is available, we
+ * return null and the caller renders a letter badge.
  */
 export function resolveLogo(business: BusinessData | null | undefined): ResolvedLogo {
-  // After handleConfirm locks in the chosen logo it writes it into `logoUrl`.
-  // If that chosen URL is the logo.dev asset, preserve the square signal —
-  // otherwise subsequent resolver calls would forget it and we'd render the
-  // square catalog tile as if it were a wordmark.
-  if (business?.logoUrl && business.logoDevUrl && business.logoUrl === business.logoDevUrl) {
-    return { src: business.logoUrl, isSquareFallback: true };
-  }
-
-  if (business?.logoUrl && business.logoIsLight !== true) {
-    return { src: business.logoUrl, isSquareFallback: false };
-  }
-
-  if (business?.logoDevUrl) {
-    return { src: business.logoDevUrl, isSquareFallback: true };
-  }
-
-  return { src: null, isSquareFallback: false };
+  const src = business?.logoUrl ?? business?.logoDevUrl ?? null;
+  return src ? { src, isSquareFallback: true } : { src: null, isSquareFallback: false };
 }

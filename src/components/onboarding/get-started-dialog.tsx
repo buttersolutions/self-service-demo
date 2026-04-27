@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, User, Mail, ChevronDown, Search } from 'lucide-react';
-import Cal, { getCalApi } from '@calcom/embed-react';
 import {
   Dialog,
   DialogContent,
@@ -17,13 +16,7 @@ import { isValidPhoneNumber, parsePhoneNumber } from 'libphonenumber-js';
 import { COUNTRY_CODES, DEFAULT_COUNTRY, type CountryCode } from '@/lib/country-codes';
 import { useOnboarding } from '@/lib/demo-flow-context';
 
-type DialogStep = 'email' | 'booking' | 'otp';
-
-const CALCOM_BOOKING_LINK = process.env.NEXT_PUBLIC_CALCOM_BOOKING_LINK;
-// Optional override for non-default cal.com regions (e.g. EU cloud at app.cal.eu).
-// Leave unset for the default cal.com instance.
-const CALCOM_ORIGIN = process.env.NEXT_PUBLIC_CALCOM_ORIGIN;
-const CALCOM_EMBED_JS_URL = CALCOM_ORIGIN ? `${CALCOM_ORIGIN}/embed/embed.js` : undefined;
+type DialogStep = 'email' | 'otp';
 
 interface GetStartedDialogProps {
   open: boolean;
@@ -231,38 +224,8 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
     }
 
     const success = await sendOtp(email);
-    if (success) setStep(CALCOM_BOOKING_LINK ? 'booking' : 'otp');
+    if (success) setStep('otp');
   };
-
-  const handleAdvanceToOtp = () => {
-    setLocalError(null);
-    clearError();
-    setStep('otp');
-  };
-
-  // Wire cal.com bookingSuccessful event → auto-advance to OTP step
-  useEffect(() => {
-    if (step !== 'booking' || !CALCOM_BOOKING_LINK) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const cal = CALCOM_EMBED_JS_URL ? await getCalApi(CALCOM_EMBED_JS_URL) : await getCalApi();
-        if (cancelled) return;
-        cal('on', {
-          action: 'bookingSuccessful',
-          callback: () => {
-            toast.success('Demo booked — see you then!');
-            setStep('otp');
-          },
-        });
-      } catch {
-        /* ignore — manual button is the fallback */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [step]);
 
   const handleVerifyOtp = async () => {
     setLocalError(null);
@@ -300,7 +263,7 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={`p-0 overflow-hidden bg-white font-sans ${step === 'booking' ? 'sm:max-w-[760px]' : 'sm:max-w-[520px]'}`}
+        className="p-0 overflow-hidden bg-white font-sans sm:max-w-[520px]"
         showCloseButton
       >
         <AnimatePresence mode="wait">
@@ -376,55 +339,6 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
                   <ArrowRight className="size-4" />
                 </span>
               </OnboardingButton>
-            </motion.div>
-          )}
-
-          {step === 'booking' && CALCOM_BOOKING_LINK && (
-            <motion.div
-              key="booking"
-              variants={stepVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={stepTransition}
-              className="p-6"
-            >
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 font-sans">
-                  Code on its way — book a walkthrough while you wait
-                </h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  We sent a 6-digit code to <span className="text-gray-600 font-medium">{email}</span>. Pick a time for a 30-min demo, or skip ahead.
-                </p>
-              </div>
-
-              <div className="overflow-hidden mb-4">
-                <Cal
-                  calLink={CALCOM_BOOKING_LINK}
-                  calOrigin={CALCOM_ORIGIN}
-                  embedJsUrl={CALCOM_EMBED_JS_URL}
-                  style={{ width: '100%', height: '420px', overflow: 'scroll' }}
-                  config={{ layout: 'month_view', theme: 'light', hideEventTypeDetails: '1' }}
-                />
-              </div>
-
-              <OnboardingButton
-                onClick={handleAdvanceToOtp}
-                active
-                className="!h-11 !rounded-xl !text-sm"
-              >
-                <span className="flex items-center justify-center gap-2">
-                  Continue to verification
-                  <ArrowRight className="size-4" />
-                </span>
-              </OnboardingButton>
-
-              <button
-                onClick={handleAdvanceToOtp}
-                className="w-full mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-              >
-                Skip for now
-              </button>
             </motion.div>
           )}
 

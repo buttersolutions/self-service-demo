@@ -8,7 +8,7 @@ import { GatheringBrandedApp } from '../animations/gathering-branded-app';
  * No progress bar is rendered here — once the user reaches the mockup the entire viewport
  * is the device frames and the Get Started CTA.
  */
-export function StepMockup() {
+export function StepMockup({ onBack }: { onBack?: () => void } = {}) {
   const { state } = useOnboarding();
   const { business, locations, gatheringData } = state;
 
@@ -21,6 +21,7 @@ export function StepMockup() {
         locations={locations}
         photos={gatheringData.photos}
         isActive
+        onBack={onBack}
       />
     </div>
   );

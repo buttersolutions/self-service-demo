@@ -3,14 +3,11 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useReducer,
   useMemo,
-  useRef,
   type ReactNode,
   type Dispatch,
 } from "react";
-import { analyzeLogoLuminance } from "./image-analysis";
 import type { PlaceSummary, ReviewInsight, ReviewAnalysis, GuestFeedbackReport } from "./types";
 import type {
   BusinessData,
@@ -276,31 +273,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     () => deriveBrandColorMap(state.business?.brandColors ?? []),
     [state.business?.brandColors],
   );
-
-  // Analyse logo luminance so the renderer can decide whether to wrap it in
-  // a brand-color pill (near-white logos need the wrap). Fails silently on
-  // CORS — unknown state is optimistic (logoIsLight stays undefined → render
-  // the logo as-is).
-  const analyzedLogoUrlRef = useRef<string | null>(null);
-  const logoUrl = state.business?.logoUrl ?? null;
-
-  useEffect(() => {
-    if (!logoUrl) return;
-    if (analyzedLogoUrlRef.current === logoUrl) return;
-    analyzedLogoUrlRef.current = logoUrl;
-
-    let cancelled = false;
-    analyzeLogoLuminance(logoUrl)
-      .then((result) => {
-        if (cancelled || !result) return;
-        dispatch({ type: "UPDATE_BUSINESS", payload: { logoIsLight: result.isLight } });
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [logoUrl]);
 
   const value = useMemo(
     () => ({ state, dispatch, brandColorMap }),

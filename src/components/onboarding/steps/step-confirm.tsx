@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useOnboarding } from '@/lib/demo-flow-context';
 import { resolveLogo } from '@/lib/safe-logo';
+import { EU_COUNTRY_CODES, EU_BOUNDS_SW, EU_BOUNDS_NE } from '@/lib/eu';
+import { toast } from 'sonner';
 import type { LocationItem } from '../types';
 
 const MAX_COLORS = 3;
@@ -155,11 +157,21 @@ function AddLocationAutocomplete({
     const place = ac.getPlace();
     if (!place.place_id || !place.geometry?.location) return;
 
+    const countryCode = extractCountryCode(place);
+
+    // Reject picks inside the EU bounding rectangle that aren't actually EU-27
+    // (UK, Norway, Switzerland, Iceland, etc.).
+    if (!countryCode || !EU_COUNTRY_CODES.has(countryCode)) {
+      toast.error('Please pick a business located in the EU.');
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+
     onPlaceSelected({
       id: place.place_id,
       name: place.name ?? '',
       address: place.formatted_address ?? '',
-      countryCode: extractCountryCode(place),
+      countryCode,
       lat: place.geometry.location.lat(),
       lng: place.geometry.location.lng(),
     });
@@ -175,7 +187,11 @@ function AddLocationAutocomplete({
     function init() {
       if (!window.google?.maps?.places || !inputRef.current) return false;
 
+      const euBounds = new google.maps.LatLngBounds(EU_BOUNDS_SW, EU_BOUNDS_NE);
+
       const ac = new google.maps.places.Autocomplete(inputRef.current, {
+        bounds: euBounds,
+        strictBounds: true,
         fields: [
           'place_id',
           'name',
@@ -187,20 +203,6 @@ function AddLocationAutocomplete({
 
       ac.addListener('place_changed', handlePlaceChanged);
       autocompleteRef.current = ac;
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            const bias = new google.maps.Circle({
-              center: { lat: latitude, lng: longitude },
-              radius: 50000,
-            });
-            ac.setBounds(bias.getBounds()!);
-          },
-          () => {},
-        );
-      }
 
       return true;
     }
@@ -320,7 +322,7 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
     // paths from re-resolving and potentially landing on a different logo.
     const chosen = resolveLogo(business);
     if (chosen.src && chosen.src !== business?.logoUrl) {
-      dispatch({ type: 'UPDATE_BUSINESS', payload: { logoUrl: chosen.src, logoIsLight: false } });
+      dispatch({ type: 'UPDATE_BUSINESS', payload: { logoUrl: chosen.src } });
     }
     onConfirm({ name: name.trim(), website: website.trim(), colors, locations });
   }, [valid, buttonLoading, name, website, colors, locations, business, dispatch, onConfirm]);
@@ -376,25 +378,12 @@ export function StepConfirm({ direction, onConfirm, hideProgressBar = false }: S
               </div>
             );
           }
-          if (logo.isSquareFallback) {
-            // logo.dev: curated 128px square asset — fill the frame edge-to-edge
-            return (
-              <div className="size-14 md:size-20 rounded-[14px] md:rounded-[20px] bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden">
-                <img
-                  src={logo.src}
-                  alt={business?.name ?? ''}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            );
-          }
-          // Firecrawl logo (detected dark): render natively with height cap for wordmarks
           return (
-            <div className="h-14 md:h-20 min-w-14 md:min-w-20 px-2 md:px-3 rounded-[14px] md:rounded-[20px] border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] flex items-center justify-center overflow-hidden bg-white">
+            <div className="size-14 md:size-20 rounded-[14px] md:rounded-[20px] bg-white border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden">
               <img
                 src={logo.src}
                 alt={business?.name ?? ''}
-                className="max-h-full w-auto max-w-[160px] md:max-w-[220px] object-contain py-2 md:py-3"
+                className="w-full h-full object-cover"
               />
             </div>
           );

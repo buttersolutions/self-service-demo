@@ -7,7 +7,7 @@ import {
   Home, TrendingUp, FileText, GraduationCap, CalendarDays,
   Users, Puzzle, MessageCircle, Bell, Settings,
   Heart, Eye, CornerDownLeft, SmilePlus, MoreVertical, Plus, MapPin, CalendarPlus,
-  Check, Palmtree, Briefcase, Mail,
+  Check, Palmtree, Briefcase, Mail, ChevronLeft,
 } from 'lucide-react';
 import { OnboardingButton, OnboardingInput } from '../ui';
 import { useOnboarding } from '@/lib/demo-flow-context';
@@ -23,17 +23,38 @@ interface GatheringBrandedAppProps {
   locations: LocationItem[];
   photos: PlacePhoto[];
   isActive: boolean;
+  onBack?: () => void;
 }
 
-const PEOPLE = [
-  { name: 'Sarah Mitchell', bgColor: '#C4F0D5', textColor: '#1B7A3D' },
-  { name: 'James Chen', bgColor: '#D8DAF9', textColor: '#3F3ABF' },
-  { name: 'Emma Rodriguez', bgColor: '#F2C4E0', textColor: '#9B2D6B' },
-  { name: 'Alex Thompson', bgColor: '#BEF5EF', textColor: '#1A7A6D' },
+type Person = { name: string; bgColor: string; textColor: string };
+
+const PERSON_COLORS: ReadonlyArray<{ bgColor: string; textColor: string }> = [
+  { bgColor: '#C4F0D5', textColor: '#1B7A3D' },
+  { bgColor: '#D8DAF9', textColor: '#3F3ABF' },
+  { bgColor: '#F2C4E0', textColor: '#9B2D6B' },
+  { bgColor: '#BEF5EF', textColor: '#1A7A6D' },
 ];
 
+const NAMES_BY_COUNTRY: Record<string, readonly [string, string, string, string]> = {
+  gb: ['Olivia Walker', 'James Patel', 'Emma Clarke', 'Alex Davies'],
+  de: ['Sophie Müller', 'Jonas Becker', 'Lena Schmidt', 'Felix Weber'],
+  dk: ['Sofie Hansen', 'Magnus Olsen', 'Freja Larsen', 'Henrik Berg'],
+  no: ['Sofie Hansen', 'Magnus Olsen', 'Freja Larsen', 'Henrik Berg'],
+  se: ['Astrid Andersson', 'Erik Lindqvist', 'Linnea Johansson', 'Oskar Bergman'],
+  nl: ['Sanne de Vries', 'Daan van den Berg', 'Eva Jansen', 'Bram Visser'],
+  it: ['Giulia Rossi', 'Marco Bianchi', 'Sofia Russo', 'Lorenzo Conti'],
+  es: ['Lucía García', 'Mateo Fernández', 'Carmen Ruiz', 'Pablo Martín'],
+  fr: ['Camille Bernard', 'Lucas Moreau', 'Chloé Dubois', 'Hugo Laurent'],
+};
+
+function resolvePeople(locations: LocationItem[]): Person[] {
+  const code = locations[0]?.countryCode?.toLowerCase();
+  const names = (code && NAMES_BY_COUNTRY[code]) || NAMES_BY_COUNTRY.gb;
+  return names.map((name, i) => ({ name, ...PERSON_COLORS[i] }));
+}
+
 function InitialsAvatar({ person, size, className, style }: {
-  person: typeof PEOPLE[number];
+  person: Person;
   size: number;
   className?: string;
   style?: React.CSSProperties;
@@ -92,6 +113,7 @@ function FeedReplica({
   logoIsSquare,
   primaryColor,
   photos,
+  people,
   animate,
 }: {
   businessName: string;
@@ -100,6 +122,7 @@ function FeedReplica({
   logoIsSquare: boolean;
   primaryColor: string;
   photos: PlacePhoto[];
+  people: Person[];
   animate: boolean;
 }) {
   const photo1 = photos[0] ? `/api/places/photo?name=${encodeURIComponent(photos[0].name)}&maxWidthPx=600` : undefined;
@@ -180,7 +203,7 @@ function FeedReplica({
           <div className="size-8 rounded-full bg-[#f0f0f0] flex items-center justify-center">
             <Settings className="size-[16px] text-[#4b5563]" strokeWidth={2.5} />
           </div>
-          <InitialsAvatar person={PEOPLE[0]} size={36} style={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
+          <InitialsAvatar person={people[0]} size={36} style={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
         </div>
       </motion.nav>
 
@@ -244,9 +267,9 @@ function FeedReplica({
               animate={animate ? fadeUp.visible : fadeUp.initial}
               transition={stagger(0.3, 3)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3">
-                <InitialsAvatar person={PEOPLE[0]} size={36} style={{ borderRadius: 12 }} />
+                <InitialsAvatar person={people[0]} size={36} style={{ borderRadius: 12 }} />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900">{PEOPLE[0].name}</div>
+                  <div className="text-sm font-medium text-gray-900">{people[0].name}</div>
                   <div className="text-xs text-gray-400 mb-2">General</div>
                   <div className="text-sm text-gray-400 h-5">Write something here...</div>
                 </div>
@@ -256,9 +279,9 @@ function FeedReplica({
             {/* Post 1: with image */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 4)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <InitialsAvatar person={PEOPLE[1]} size={36} style={{ borderRadius: 12 }} />
+                <InitialsAvatar person={people[1]} size={36} style={{ borderRadius: 12 }} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-900">{PEOPLE[1].name}</div>
+                  <div className="text-sm font-semibold text-gray-900">{people[1].name}</div>
                   <div className="text-xs text-gray-400">
                     11:28 in <span className="text-gray-400">Announcements</span>
                   </div>
@@ -290,8 +313,8 @@ function FeedReplica({
                     <span className="text-xs">❤️ 1</span>
                   </button>
                   <div className="flex items-center -space-x-1.5 ml-1">
-                    <InitialsAvatar person={PEOPLE[2]} size={20} style={{ borderRadius: '50%', border: '2px solid white' }} />
-                    <InitialsAvatar person={PEOPLE[3]} size={20} style={{ borderRadius: '50%', border: '2px solid white' }} />
+                    <InitialsAvatar person={people[2]} size={20} style={{ borderRadius: '50%', border: '2px solid white' }} />
+                    <InitialsAvatar person={people[3]} size={20} style={{ borderRadius: '50%', border: '2px solid white' }} />
                   </div>
                   <button className="px-3 py-[6px] rounded-full border border-gray-200 bg-gray-50 text-xs font-medium text-gray-900">
                     5 comments
@@ -311,9 +334,9 @@ function FeedReplica({
             {/* Post 2: text only */}
             <motion.div className="bg-white rounded-xl p-4" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.3, 5)} style={{ boxShadow: '0px 0px 0px 1px rgba(0,0,0,0.05), 0px 1px 2px -1px rgba(0,0,0,0.06), 0px 2px 4px 0px rgba(0,0,0,0.03)' }}>
               <div className="flex items-start gap-3 mb-3">
-                <InitialsAvatar person={PEOPLE[2]} size={36} style={{ borderRadius: 12 }} />
+                <InitialsAvatar person={people[2]} size={36} style={{ borderRadius: 12 }} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-900">{PEOPLE[2].name}</div>
+                  <div className="text-sm font-semibold text-gray-900">{people[2].name}</div>
                   <div className="text-xs text-gray-400">
                     09:15 in <span className="text-gray-400">Office Life</span>
                   </div>
@@ -368,8 +391,8 @@ function FeedReplica({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <InitialsAvatar person={PEOPLE[2]} size={16} style={{ borderRadius: '50%' }} />
-                        <span className="text-sm font-semibold text-gray-900 truncate">{PEOPLE[2].name}</span>
+                        <InitialsAvatar person={people[2]} size={16} style={{ borderRadius: '50%' }} />
+                        <span className="text-sm font-semibold text-gray-900 truncate">{people[2].name}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">🌴 Vacation · 5 days</p>
                     </div>
@@ -494,6 +517,7 @@ function MobileFeedReplica({
   primaryColor,
   headerColor,
   photos,
+  people,
   animate,
 }: {
   businessName: string;
@@ -503,6 +527,7 @@ function MobileFeedReplica({
   primaryColor: string;
   headerColor: string;
   photos: PlacePhoto[];
+  people: Person[];
   animate: boolean;
 }) {
   const storyPhoto1 = photos[2] ? `/api/places/photo?name=${encodeURIComponent(photos[2].name)}&maxWidthPx=400` : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop';
@@ -570,7 +595,7 @@ function MobileFeedReplica({
         <div className="shrink-0 flex flex-col items-center gap-1">
           <div className="relative">
             <div className="size-[72px] rounded-full overflow-hidden border-[3px] border-[#FA614C] p-[2px]">
-              <InitialsAvatar person={PEOPLE[0]} size={66} style={{ borderRadius: '50%', width: '100%', height: '100%' }} />
+              <InitialsAvatar person={people[0]} size={66} style={{ borderRadius: '50%', width: '100%', height: '100%' }} />
             </div>
             <div className="absolute -top-1 -right-1 size-[20px] rounded-full bg-[#FA614C] flex items-center justify-center border-2 border-white">
               <span className="text-[9px] font-bold text-white">2</span>
@@ -624,9 +649,9 @@ function MobileFeedReplica({
       <motion.div className="flex-1 min-h-0 overflow-hidden border-t border-gray-100" initial={fadeUp.initial} animate={animate ? fadeUp.visible : fadeUp.initial} transition={stagger(0.4, 3)}>
         <div className="px-4 pt-4 pb-1">
           <div className="flex items-start gap-3 mb-2">
-            <InitialsAvatar person={PEOPLE[1]} size={44} style={{ borderRadius: 12 }} />
+            <InitialsAvatar person={people[1]} size={44} style={{ borderRadius: 12 }} />
             <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-bold text-[#1A2027]">{PEOPLE[1].name}</div>
+              <div className="text-[15px] font-bold text-[#1A2027]">{people[1].name}</div>
               <div className="text-[12px] text-[#7E7E7E]">09:03 in Announcements</div>
             </div>
             <MoreVertical className="size-5 text-[#C0C0C0] shrink-0 mt-1" />
@@ -751,6 +776,7 @@ export function GatheringBrandedApp({
   locations,
   photos,
   isActive,
+  onBack,
 }: GatheringBrandedAppProps) {
   const { brandColorMap, state } = useOnboarding();
   const primaryColor = brandColorMap.primaryColor;
@@ -758,6 +784,7 @@ export function GatheringBrandedApp({
   // Logo resolution: src + whether to wrap in a colored pill (for near-white
   // logos) with wrapColor being the CTA button color (strongest brand signal).
   const logo = resolveLogo(state.business);
+  const people = resolvePeople(locations);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -838,11 +865,22 @@ export function GatheringBrandedApp({
       >
         <div className="w-full h-full p-2 sm:p-4 bg-[#625CE4]">
           <motion.div
-            className="w-full h-full flex flex-col md:flex-row rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden"
+            className="w-full h-full flex flex-col md:flex-row rounded-2xl bg-white/95 backdrop-blur-sm border border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] overflow-hidden relative"
             initial={{ opacity: 0 }}
             animate={isActive ? { opacity: 1 } : {}}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
+            {/* Mobile back button — overlaid on the card's top-left */}
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="md:hidden absolute top-3 left-3 z-30 size-9 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center text-gray-600 shadow-sm hover:bg-white transition-colors cursor-pointer"
+                aria-label="Back"
+              >
+                <ChevronLeft className="size-5" />
+              </button>
+            ) : null}
             {/* Left sidebar — hidden on mobile */}
             <motion.div
               className="hidden md:flex w-80 shrink-0 flex-col border-r border-gray-200/80 bg-gray-50 font-sans"
@@ -851,8 +889,18 @@ export function GatheringBrandedApp({
               transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="flex-1 px-3.5 py-5">
-                {/* Logo */}
-                <div className="px-2.5 mb-5">
+                {/* Logo + back */}
+                <div className="flex items-center gap-2 px-2.5 mb-5">
+                  {onBack ? (
+                    <button
+                      type="button"
+                      onClick={onBack}
+                      className="size-8 -ml-2 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer"
+                      aria-label="Back"
+                    >
+                      <ChevronLeft className="size-5" />
+                    </button>
+                  ) : null}
                   <AllgravyLogo className="w-24 text-gray-900" />
                 </div>
 
@@ -946,7 +994,7 @@ export function GatheringBrandedApp({
                         <div className="absolute bottom-0 left-0">
                           <LaptopMockup>
                             <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                              <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                              <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} people={people} animate={isActive} />
                             </div>
                           </LaptopMockup>
                         </div>
@@ -962,6 +1010,7 @@ export function GatheringBrandedApp({
                                 primaryColor={primaryColor}
                                 headerColor={darkestBrandColor}
                                 photos={photos}
+                                people={people}
                                 animate={isActive}
                               />
                             </div>
@@ -1075,7 +1124,7 @@ export function GatheringBrandedApp({
                   >
                     <LaptopMockup>
                       <div style={{ width: 1200, height: 750, transform: `scale(${LAPTOP_SCALE})`, transformOrigin: 'top left' }}>
-                        <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} animate={isActive} />
+                        <FeedReplica businessName={businessName} logoUrl={logo.src} logoIsSquare={logo.isSquareFallback} primaryColor={primaryColor} photos={photos} people={people} animate={isActive} />
                       </div>
                     </LaptopMockup>
                   </motion.div>
@@ -1096,6 +1145,7 @@ export function GatheringBrandedApp({
                           primaryColor={primaryColor}
                           headerColor={darkestBrandColor}
                           photos={photos}
+                          people={people}
                           animate={isActive}
                         />
                       </div>
@@ -1166,6 +1216,7 @@ export function GatheringBrandedApp({
             logoIsSquare={logo.isSquareFallback}
             primaryColor={primaryColor}
             photos={photos}
+            people={people}
             animate={expanded}
           />
         </div>
@@ -1187,6 +1238,7 @@ export function GatheringBrandedApp({
             primaryColor={primaryColor}
             headerColor={darkestBrandColor}
             photos={photos}
+            people={people}
             animate={expanded}
           />
         </div>

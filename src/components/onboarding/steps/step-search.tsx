@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import type { PlaceSummary } from '@/lib/types';
+import { EU_COUNTRY_CODES, EU_BOUNDS_SW, EU_BOUNDS_NE } from '@/lib/eu';
 
 interface StepSearchProps {
   direction: number;
@@ -16,6 +17,7 @@ interface StepSearchProps {
 
 export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepSearchProps) {
   const [selectedPlace, setSelectedPlace] = useState<PlaceSummary | null>(initialPlace ?? null);
+  const [regionError, setRegionError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
@@ -29,6 +31,17 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
     const countryComponent = place.address_components?.find((c) =>
       c.types.includes('country'),
     );
+    const countryCode = countryComponent?.short_name?.toLowerCase();
+
+    // Reject picks that fell inside the EU bounding rectangle but aren't
+    // actually EU-27 (UK, Norway, Switzerland, Iceland, etc.).
+    if (!countryCode || !EU_COUNTRY_CODES.has(countryCode)) {
+      setSelectedPlace(null);
+      setRegionError('Please pick a business located in the EU.');
+      return;
+    }
+
+    setRegionError(null);
 
     const summary: PlaceSummary = {
       placeId: place.place_id,
@@ -36,7 +49,7 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
       formattedAddress: place.formatted_address ?? '',
       websiteUri: place.website,
       types: place.types,
-      countryCode: countryComponent?.short_name?.toLowerCase(),
+      countryCode,
       location: {
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
@@ -52,8 +65,12 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
     function init() {
       if (!window.google?.maps?.places || !inputRef.current) return false;
 
+      const euBounds = new google.maps.LatLngBounds(EU_BOUNDS_SW, EU_BOUNDS_NE);
+
       const ac = new google.maps.places.Autocomplete(inputRef.current, {
         types: ['establishment'],
+        bounds: euBounds,
+        strictBounds: true,
         fields: [
           'place_id',
           'name',
@@ -67,20 +84,6 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
 
       ac.addListener('place_changed', handlePlaceChanged);
       autocompleteRef.current = ac;
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            const circle = new google.maps.Circle({
-              center: { lat: latitude, lng: longitude },
-              radius: 50000,
-            });
-            ac.setBounds(circle.getBounds()!);
-          },
-          () => {},
-        );
-      }
 
       return true;
     }
@@ -128,8 +131,14 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
           defaultValue={initialPlace?.displayName ?? ''}
           disabled={loading}
           autoFocus
-          onChange={() => setSelectedPlace(null)}
+          onChange={() => {
+            setSelectedPlace(null);
+            setRegionError(null);
+          }}
         />
+        {regionError && (
+          <p className="mt-2 text-xs text-red-500 text-center">{regionError}</p>
+        )}
       </motion.div>
 
       <motion.div className="w-full mt-6" variants={childVariants}>

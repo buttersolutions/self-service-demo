@@ -28,15 +28,11 @@ export interface BusinessData {
   websiteImages?: string[];
   instagramUsername?: string | null;
   /**
-   * True when the primary logo image is near-white and would be invisible on
-   * a white background. Set by a client-side pixel sampling pass. When true
-   * we fall back to `logoDevUrl` instead of rendering the Firecrawl logo.
-   */
-  logoIsLight?: boolean;
-  /**
-   * Logo.dev fallback URL — a curated, always-square, always-bg-safe logo
-   * from logo.dev's business catalog. Used when the Firecrawl logo is
-   * missing or is detected as near-white.
+   * Logo.dev URL — a curated, always-square, always-bg-safe logo from
+   * logo.dev's business catalog. Mirrors `logoUrl` for domain-based flows
+   * (logo.dev is the sole logo source); kept as a separate field so the
+   * Instagram path (which sets `logoUrl` from a profile picture) doesn't
+   * accidentally write to it.
    */
   logoDevUrl?: string | null;
 }
