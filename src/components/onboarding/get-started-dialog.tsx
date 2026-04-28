@@ -185,6 +185,8 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [website, setWebsite] = useState('');
+  const formOpenedAt = useRef<number>(Date.now());
 
   const displayError = localError || error;
 
@@ -196,10 +198,12 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
     setPhoneNumber('');
     setOtp('');
     setLocalError(null);
+    setWebsite('');
     clearError();
   };
 
   const handleOpenChange = (open: boolean) => {
+    if (open) formOpenedAt.current = Date.now();
     if (!open) resetState();
     onOpenChange(open);
   };
@@ -207,6 +211,14 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
   const handleSendOtp = async () => {
     setLocalError(null);
     clearError();
+
+    // Bot traps: honeypot field must be empty, and humans need >1.5s to fill the form.
+    // Fake the success state so bots don't get feedback to retry against.
+    if (website || Date.now() - formOpenedAt.current < 1500) {
+      setStep('otp');
+      return;
+    }
+
     if (!email || !fullName) {
       setLocalError('Please fill in all fields.');
       return;
@@ -288,6 +300,30 @@ export function GetStartedDialog({ open, onOpenChange }: GetStartedDialogProps) 
               </div>
 
               <div className="flex flex-col gap-3 mb-4">
+                {/* Honeypot — humans never see/focus this; bots filling all fields will trip the check. */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: '-9999px',
+                    top: 'auto',
+                    width: '1px',
+                    height: '1px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <label htmlFor="website">Website (leave blank)</label>
+                  <input
+                    id="website"
+                    name="website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                  />
+                </div>
+
                 <OnboardingInput
                   placeholder="Full name"
                   value={fullName}

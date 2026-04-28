@@ -91,6 +91,7 @@ const STANDARD_FEEDS: { name: string; post: string }[] = [
   { name: '🎲 Random', post: 'For anything and everything that doesn\'t fit elsewhere.' },
 ];
 
+
 function buildFeeds(
   locations: LocationItem[],
   gatheringData: GatheringData,
