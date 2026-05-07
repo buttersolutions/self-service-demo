@@ -235,10 +235,10 @@ const SUPPORT_EMAIL_URL = 'mailto:support@allgravy.com';
 const GETTING_STARTED_BLOCKS: RichBlock[] = [
   { type: 'header-two', segments: ['Welcome to All Gravy! 🎉'] },
   { type: 'unstyled', segments: ["You're all set up and ready to go. Your account is live, your branding is in place, and now it's time to bring your team on board."] },
-  { type: 'unstyled', segments: [{ bold: 'Important:' }, ' To invite your team and personalise your account settings, you need to use the web version at ', { link: 'account.allgravy.com', url: ALLGRAVY_URL }, ". That's where all the admin setup happens. If you're on the mobile app, just open a web browser and head there. Let's get started."] },
+  { type: 'unstyled', segments: [{ bold: 'Important:' }, ' To invite your team and personalise your account settings, you need to use the web version at ', { link: 'account.allgravy.com', url: ALLGRAVY_URL }, " on a computer. That's where all the admin setup happens, and it's not fully supported on mobile yet. So when you're ready, head over to your laptop or desktop to continue."] },
 
   { type: 'header-three', segments: ['Step 1: Sign In to account.allgravy.com'] },
-  { type: 'unstyled', segments: ['Go to ', { link: 'https://account.allgravy.com', url: ALLGRAVY_URL }, " and sign in with your email and password. This is your admin hub where you'll manage your team and customize your account."] },
+  { type: 'unstyled', segments: ['On your computer, open ', { link: 'https://account.allgravy.com', url: ALLGRAVY_URL }, " and sign in with your email and password. This is your admin hub where you'll manage your team and customise your account."] },
 
   { type: 'header-three', segments: ['Step 2: Create and Invite Your Team'] },
   { type: 'unstyled', segments: ["Once you're logged in on the web, follow these steps to add your colleagues."] },
