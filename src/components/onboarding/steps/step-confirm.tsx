@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useOnboarding } from '@/lib/demo-flow-context';
 import { resolveLogo } from '@/lib/safe-logo';
-import { EU_COUNTRY_CODES, EU_BOUNDS_SW, EU_BOUNDS_NE } from '@/lib/eu';
+import { EUROPE_COUNTRY_CODES, EUROPE_BOUNDS_SW, EUROPE_BOUNDS_NE } from '@/lib/europe';
 import { toast } from 'sonner';
 import type { LocationItem } from '../types';
 
@@ -159,10 +159,10 @@ function AddLocationAutocomplete({
 
     const countryCode = extractCountryCode(place);
 
-    // Reject picks inside the EU bounding rectangle that aren't actually EU-27
-    // (UK, Norway, Switzerland, Iceland, etc.).
-    if (!countryCode || !EU_COUNTRY_CODES.has(countryCode)) {
-      toast.error('Please pick a business located in the EU.');
+    // Reject picks inside the bounding rectangle that aren't actually in a
+    // European country.
+    if (!countryCode || !EUROPE_COUNTRY_CODES.has(countryCode)) {
+      toast.error('Please pick a business located in Europe.');
       if (inputRef.current) inputRef.current.value = '';
       return;
     }
@@ -187,10 +187,10 @@ function AddLocationAutocomplete({
     function init() {
       if (!window.google?.maps?.places || !inputRef.current) return false;
 
-      const euBounds = new google.maps.LatLngBounds(EU_BOUNDS_SW, EU_BOUNDS_NE);
+      const europeBounds = new google.maps.LatLngBounds(EUROPE_BOUNDS_SW, EUROPE_BOUNDS_NE);
 
       const ac = new google.maps.places.Autocomplete(inputRef.current, {
-        bounds: euBounds,
+        bounds: europeBounds,
         strictBounds: true,
         fields: [
           'place_id',

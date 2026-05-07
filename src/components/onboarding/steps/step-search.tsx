@@ -6,7 +6,7 @@ import { Search } from 'lucide-react';
 import { OnboardingInput, OnboardingButton } from '../ui';
 import { stepVariants, childVariants } from '../constants';
 import type { PlaceSummary } from '@/lib/types';
-import { EU_COUNTRY_CODES, EU_BOUNDS_SW, EU_BOUNDS_NE } from '@/lib/eu';
+import { EUROPE_COUNTRY_CODES, EUROPE_BOUNDS_SW, EUROPE_BOUNDS_NE } from '@/lib/europe';
 
 interface StepSearchProps {
   direction: number;
@@ -33,11 +33,11 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
     );
     const countryCode = countryComponent?.short_name?.toLowerCase();
 
-    // Reject picks that fell inside the EU bounding rectangle but aren't
-    // actually EU-27 (UK, Norway, Switzerland, Iceland, etc.).
-    if (!countryCode || !EU_COUNTRY_CODES.has(countryCode)) {
+    // Reject picks that fell inside the bounding rectangle but aren't
+    // actually in a European country.
+    if (!countryCode || !EUROPE_COUNTRY_CODES.has(countryCode)) {
       setSelectedPlace(null);
-      setRegionError('Please pick a business located in the EU.');
+      setRegionError('Please pick a business located in Europe.');
       return;
     }
 
@@ -65,11 +65,11 @@ export function StepSearch({ direction, initialPlace, onSubmit, loading }: StepS
     function init() {
       if (!window.google?.maps?.places || !inputRef.current) return false;
 
-      const euBounds = new google.maps.LatLngBounds(EU_BOUNDS_SW, EU_BOUNDS_NE);
+      const europeBounds = new google.maps.LatLngBounds(EUROPE_BOUNDS_SW, EUROPE_BOUNDS_NE);
 
       const ac = new google.maps.places.Autocomplete(inputRef.current, {
         types: ['establishment'],
-        bounds: euBounds,
+        bounds: europeBounds,
         strictBounds: true,
         fields: [
           'place_id',
