@@ -5,11 +5,8 @@ import type { PlacePhoto } from '@/lib/types';
 
 /* ── Config ─────────────────────────────────────────────────────────── */
 
-// const API_BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL || 'http://localhost:8080';
-// const REDIRECT_BASE_URL = process.env.NEXT_PUBLIC_ORG_ADMIN_URL || 'http://localhost:3001';
-
-const API_BASE ='http://localhost:8080';
-const REDIRECT_BASE_URL =  'http://localhost:3001';
+const API_BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL || 'http://localhost:8080';
+const REDIRECT_BASE_URL = process.env.NEXT_PUBLIC_ORG_ADMIN_URL || 'http://localhost:3001';
 
 const api = axios.create({
   baseURL: `${API_BASE}/self-service-onboarding`,
